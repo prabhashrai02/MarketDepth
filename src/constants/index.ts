@@ -13,6 +13,10 @@ export const CONNECTING = 'connecting' as const;
 export const BUY = 'buy' as const;
 export const SELL = 'sell' as const;
 
+// Order book side constants
+export const BIDS = 'bids' as const;
+export const ASKS = 'asks' as const;
+
 // Message type constants
 export const ORDERBOOK_UPDATE = 'orderbook_update' as const;
 export const CONNECTION_STATUS = 'connection_status' as const;
@@ -25,3 +29,4 @@ export type Venue = typeof POLYMARKET | typeof KALSHI;
 export type ConnectionStatus = typeof CONNECTED | typeof DISCONNECTED | typeof ERROR | typeof CONNECTING;
 export type Side = typeof BUY | typeof SELL;
 export type MessageType = typeof ORDERBOOK_UPDATE | typeof CONNECTION_STATUS | typeof ERROR;
+export type OrderBookSide = typeof BIDS | typeof ASKS;
