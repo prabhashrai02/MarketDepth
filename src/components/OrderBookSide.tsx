@@ -22,12 +22,12 @@ export const OrderBookSide: React.FC<OrderBookSideProps> = ({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-700">{title}</h3>
-        <span className="text-xs text-gray-500">
+        <h3 className="text-base font-semibold text-slate-50">{title}</h3>
+        <span className="text-sm text-slate-300">
           {levels.length} levels
         </span>
       </div>
-      <div className="space-y-0 border border-gray-200 rounded-md overflow-hidden">
+      <div className="space-y-0 border border-[#1f2a45] rounded-md overflow-hidden">
         {displayLevels.map((level, index) => {
           const percentage = calculateLevelPercentage(level.size, totalSize);
           return (

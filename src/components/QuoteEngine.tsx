@@ -3,6 +3,7 @@ import { useMarketStore } from '@/store/useMarketStore';
 import { calculateQuote } from '@/utils/quoteCalculator';
 import { formatPrice, formatSize, formatPercentage } from '@/utils/formatters';
 import type { QuoteSide } from '@/types/market';
+import { SelectDropdown } from './SelectDropdown';
 
 export const QuoteEngine: React.FC = () => {
   const [amount, setAmount] = useState<number>(100);
@@ -10,7 +11,9 @@ export const QuoteEngine: React.FC = () => {
   const [outcome, setOutcome] = useState<'Yes' | 'No'>('Yes');
 
   const orderBook = useMarketStore((state) => state.orderBook);
-  const polymarketOrderBook = useMarketStore((state) => state.polymarketOrderBook);
+  const polymarketOrderBook = useMarketStore(
+    (state) => state.polymarketOrderBook,
+  );
   const kalshiOrderBook = useMarketStore((state) => state.kalshiOrderBook);
 
   const quote = useMemo(() => {
@@ -19,79 +22,92 @@ export const QuoteEngine: React.FC = () => {
     }
 
     const combinedLevels = side === 'buy' ? orderBook.asks : orderBook.bids;
-    const polLevels = side === 'buy' ? polymarketOrderBook.asks : polymarketOrderBook.bids;
-    const kalLevels = side === 'buy' ? kalshiOrderBook.asks : kalshiOrderBook.bids;
+    const polLevels =
+      side === 'buy' ? polymarketOrderBook.asks : polymarketOrderBook.bids;
+    const kalLevels =
+      side === 'buy' ? kalshiOrderBook.asks : kalshiOrderBook.bids;
 
     return calculateQuote(amount, side, polLevels, kalLevels, combinedLevels);
   }, [amount, side, orderBook, polymarketOrderBook, kalshiOrderBook]);
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-4 hover-lift transition-all">
-      <h2 className="text-lg font-semibold text-gray-900 mb-2">Quote Simulator</h2>
-      <p className="text-sm text-gray-500 mb-4">
-        Enter an amount and choose direction. Orders are routed across venues by best price.
+    <div className="bg-[#0d1b34] border border-[#2f4064] rounded-2xl p-5 shadow-inner">
+      <h2 className="text-lg md:text-xl font-bold text-cyan-300 mb-2">
+        Quote Simulator
+      </h2>
+      <p className="text-sm md:text-base text-slate-300/90 leading-relaxed mb-4">
+        Enter trade amount and side; prices are simulated using aggregated
+        liquidity from both venues.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Outcome</label>
-          <select
-            aria-label="Outcome"
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value as 'Yes' | 'No')}
-            className="mt-1 w-full rounded border-gray-300 p-2"
-          >
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <SelectDropdown
+          label="Outcome"
+          value={outcome}
+          options={[
+            { value: 'Yes', label: 'Yes' },
+            { value: 'No', label: 'No' },
+          ]}
+          onChange={(nextValue) => setOutcome(nextValue as 'Yes' | 'No')}
+        />
 
-        <div>
-          <label className="block text-xs font-medium text-gray-700">Side</label>
-          <select
-            aria-label="Side"
-            value={side}
-            onChange={(e) => setSide(e.target.value as QuoteSide)}
-            className="mt-1 w-full rounded border-gray-300 p-2"
-          >
-            <option value="buy">Buy</option>
-            <option value="sell">Sell</option>
-          </select>
-        </div>
+        <SelectDropdown
+          label="Side"
+          value={side}
+          options={[
+            { value: 'buy', label: 'Buy' },
+            { value: 'sell', label: 'Sell' },
+          ]}
+          onChange={(nextValue) => setSide(nextValue as QuoteSide)}
+        />
 
         <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-gray-700">Amount (USD)</label>
+          <label className="block text-sm font-medium text-slate-300">
+            Amount (USD)
+          </label>
           <input
             type="number"
             min={0}
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
-            className="mt-1 w-full rounded border-gray-300 p-2"
+            className="mt-1 w-full rounded-lg border border-[#2f4064] bg-[#12203f] text-cyan-100 p-2 focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-500/30"
             placeholder="100"
           />
         </div>
       </div>
 
       {!quote ? (
-        <p className="text-sm text-gray-500">Enter a valid amount to preview a quote.</p>
+        <p className="text-sm text-slate-300">
+          Enter a valid amount to preview a quote.
+        </p>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <div className="rounded border border-gray-200 p-3 bg-gray-50">
-              <div className="text-xs text-gray-500">Total shares (combined)</div>
-              <div className="text-2xl font-semibold text-indigo-600">{formatSize(quote.totalShares)}</div>
+            <div className="rounded-xl border border-[#2f4064] p-3 bg-[#12203f]">
+              <div className="text-sm text-cyan-300">
+                Total shares (combined)
+              </div>
+              <div className="text-2xl font-bold text-cyan-200">
+                {formatSize(quote.totalShares)}
+              </div>
             </div>
-            <div className="rounded border border-gray-200 p-3 bg-gray-50">
-              <div className="text-xs text-gray-500">Average price</div>
-              <div className="text-2xl font-semibold text-indigo-600">{formatPrice(quote.averagePrice)}</div>
+            <div className="rounded-xl border border-[#2f4064] p-3 bg-[#12203f]">
+              <div className="text-sm text-slate-300">Average price</div>
+              <div className="text-2xl font-bold text-cyan-200">
+                {formatPrice(quote.averagePrice)}
+              </div>
             </div>
-            <div className="rounded border border-gray-200 p-3 bg-gray-50">
-              <div className="text-xs text-gray-500">Total cost</div>
-              <div className="text-2xl font-semibold text-indigo-600">{formatPrice(quote.totalCost)}</div>
+            <div className="rounded-xl border border-[#2f4064] p-3 bg-[#12203f]">
+              <div className="text-sm text-slate-300">Total cost</div>
+              <div className="text-2xl font-bold text-cyan-200">
+                {formatPrice(quote.totalCost)}
+              </div>
             </div>
-            <div className="rounded border border-gray-200 p-3 bg-gray-50">
-              <div className="text-xs text-gray-500">Slippage vs best</div>
-              <div className="text-2xl font-semibold text-indigo-600">{formatPercentage(quote.slippage)}</div>
+            <div className="rounded-xl border border-[#2f4064] p-3 bg-[#12203f]">
+              <div className="text-sm text-slate-300">Slippage vs best</div>
+              <div className="text-2xl font-bold text-cyan-200">
+                {formatPercentage(quote.slippage)}
+              </div>
             </div>
           </div>
 
@@ -99,46 +115,81 @@ export const QuoteEngine: React.FC = () => {
             {(['polymarket', 'kalshi'] as const).map((venue) => {
               const venueQuote = quote.venueBreakdown[venue];
               return (
-                <div key={venue} className="rounded border border-gray-200 p-3">
-                  <h3 className="text-sm font-semibold text-gray-700 capitalize">{venue}</h3>
-                  <div className="mt-2 text-xs text-gray-500">Fillable shares (single venue)</div>
-                  <div className="text-xl font-bold text-blue-600">{formatSize(venueQuote.shares)}</div>
-                  <div className="text-xs text-gray-500">Cost: {formatPrice(venueQuote.cost)}</div>
-                  <div className="text-xs text-gray-500">Avg: {formatPrice(venueQuote.avgPrice)}</div>
-                  <div className="text-xs text-red-500">Unfilled USD: {formatPrice(venueQuote.unfilledAmount)}</div>
+                <div
+                  key={venue}
+                  className="rounded-lg border border-[#2f4064] p-3 bg-[#0d1c3b]"
+                >
+                  <h3 className="text-sm font-semibold text-cyan-200 capitalize">
+                    {venue}
+                  </h3>
+                  <div className="mt-2 text-sm text-slate-300">
+                    Fillable shares (single venue)
+                  </div>
+                  <div className="text-xl font-bold text-cyan-200">
+                    {formatSize(venueQuote.shares)}
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Cost: {formatPrice(venueQuote.cost)}
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    Avg: {formatPrice(venueQuote.avgPrice)}
+                  </div>
+                  <div className="text-sm text-rose-300">
+                    Unfilled USD: {formatPrice(venueQuote.unfilledAmount)}
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-4 rounded border border-gray-200 bg-white p-3">
-            <div className="text-sm font-semibold text-gray-700">Routing summary</div>
+          <div className="mt-4 rounded-xl border border-[#2f4064] bg-[#0d1c3b] p-3">
+            <div className="text-sm font-semibold text-cyan-200">
+              Routing summary
+            </div>
             {quote.routing.length === 0 ? (
-              <small className="text-gray-500">No available liquidity for this amount/side.</small>
+              <small className="text-slate-300">
+                No available liquidity for this amount/side.
+              </small>
             ) : (
-              <table className="w-full text-xs mt-2 border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-200 text-gray-500">
-                    <th className="py-1 text-left">Venue</th>
-                    <th className="py-1 text-right">Price</th>
-                    <th className="py-1 text-right">Size</th>
-                    <th className="py-1 text-right">Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quote.routing.map((row, index) => (
-                    <tr key={`${row.venue}-${index}`} className="border-b border-gray-100">
-                      <td className="py-1 text-left capitalize">{row.venue}</td>
-                      <td className="py-1 text-right">{formatPrice(row.price)}</td>
-                      <td className="py-1 text-right">{formatSize(row.size)}</td>
-                      <td className="py-1 text-right">{formatPrice(row.cost)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm mt-2 border-collapse min-w-[360px]">
+                  <thead>
+                    <tr className="border-b border-[#2a3b5e] text-slate-200">
+                      <th className="py-2 text-left text-sm">Venue</th>
+                      <th className="py-2 text-right text-sm">Price</th>
+                      <th className="py-2 text-right text-sm">Size</th>
+                      <th className="py-2 text-right text-sm">Cost</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {quote.routing.map((row, index) => (
+                      <tr
+                        key={`${row.venue}-${index}`}
+                        className="border-b border-slate-700 text-slate-200"
+                      >
+                        <td className="py-1 text-left capitalize">
+                          {row.venue}
+                        </td>
+                        <td className="py-1 text-right">
+                          {formatPrice(row.price)}
+                        </td>
+                        <td className="py-1 text-right">
+                          {formatSize(row.size)}
+                        </td>
+                        <td className="py-1 text-right">
+                          {formatPrice(row.cost)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             {quote.unfilledAmount > 0 && (
-              <p className="mt-2 text-xs text-red-600">Unfilled amount: {formatPrice(quote.unfilledAmount)} (insufficient depth)</p>
+              <p className="mt-2 text-xs text-red-600">
+                Unfilled amount: {formatPrice(quote.unfilledAmount)}{' '}
+                (insufficient depth)
+              </p>
             )}
           </div>
         </>

@@ -18,8 +18,8 @@ export const VENUE_CONFIG = {
   combined: {
     name: 'Both Venues',
     shortName: 'BOTH',
-    color: 'bg-gray-100 text-gray-700',
-    indicatorColor: 'text-gray-600',
+    color: 'bg-slate-800 text-cyan-200',
+    indicatorColor: 'text-cyan-300',
   },
 } as const;
 
@@ -50,7 +50,7 @@ export const CONNECTION_STATUS_STYLES = {
     symbol: '⚠',
   },
   default: {
-    color: 'text-gray-600',
+    color: 'text-slate-300',
     symbol: '?',
   },
 } as const;

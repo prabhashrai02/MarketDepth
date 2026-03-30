@@ -1,1 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', Roboto, Arial, sans-serif;
+  background: radial-gradient(circle at 10% 20%, #020617 0%, #0b1221 45%, #060b14 100%);
+  color: #e2e8f0;
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+}
+
+* {
+  transition: none !important;
+}
+

@@ -25,7 +25,7 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
       case 'error':
         return 'text-red-600';
       default:
-        return 'text-gray-600';
+        return 'text-slate-300';
     }
   };
 
@@ -46,9 +46,9 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
 
   if (hasConnectionIssues) {
     return (
-      <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+      <div className="mb-4 p-3 bg-slate-800 border border-rose-500/40 rounded-md">
         <div className="flex items-center">
-          <span className="text-orange-600 text-sm">
+          <span className="text-rose-300 text-sm">
             ⚠️ Connection issues detected. Some data may be unavailable.
           </span>
         </div>
@@ -58,9 +58,9 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
 
   if (isDisconnected && !hasConnectionIssues) {
     return (
-      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+      <div className="mb-4 p-3 bg-slate-800 border border-cyan-500/40 rounded-md">
         <div className="flex items-center">
-          <span className="text-yellow-600 text-sm">
+          <span className="text-cyan-200 text-sm">
             📡 Connecting to data sources...
           </span>
         </div>
@@ -74,13 +74,13 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
         <span className={getConnectionStatusColor(polymarketStatus)}>
           {getConnectionStatusText(polymarketStatus)}
         </span>
-        <span className="text-gray-600">Polymarket</span>
+        <span className="text-slate-300">Polymarket</span>
       </div>
       <div className="flex items-center space-x-1">
         <span className={getConnectionStatusColor(kalshiStatus)}>
           {getConnectionStatusText(kalshiStatus)}
         </span>
-        <span className="text-gray-600">Kalshi</span>
+        <span className="text-slate-300">Kalshi</span>
       </div>
     </div>
   );

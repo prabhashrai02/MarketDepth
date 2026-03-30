@@ -4,14 +4,14 @@
 
 export const ORDER_BOOK_STYLES = {
   bid: {
-    bgColor: 'bg-green-500',
-    textColor: 'text-green-600',
-    bgOpacityClass: 'bg-green-500 opacity-10',
+    bgColor: 'bg-cyan-500',
+    textColor: 'text-cyan-300',
+    bgOpacityClass: 'bg-cyan-500 opacity-20',
   },
   ask: {
-    bgColor: 'bg-red-500',
-    textColor: 'text-red-600',
-    bgOpacityClass: 'bg-red-500 opacity-10',
+    bgColor: 'bg-fuchsia-500',
+    textColor: 'text-fuchsia-300',
+    bgOpacityClass: 'bg-fuchsia-500 opacity-20',
   },
 } as const;
 
@@ -22,27 +22,27 @@ export const SIZE_CLASSES = {
 } as const;
 
 export const INTERACTIVE_CLASSES = {
-  base: 'hover:bg-gray-50 transition-all duration-200 cursor-pointer',
+  base: 'hover:bg-slate-800 transition-all duration-200 cursor-pointer',
   static: '',
 } as const;
 
 export const ANIMATION_CLASSES = {
-  fadeIn: 'animate-fade-in',
-  slideIn: 'animate-slide-in',
-  pulse: 'animate-pulse-slow',
+  fadeIn: '',
+  slideIn: '',
+  pulse: '',
 } as const;
 
 export const LAYOUT_CLASSES = {
-  container: 'bg-white rounded-lg shadow-lg p-4 hover-lift transition-all',
+  container: 'bg-slate-900/80 rounded-lg shadow-lg p-4 hover-lift transition-all',
   grid: 'grid grid-cols-2 gap-4',
-  section: 'space-y-0 border border-gray-200 rounded-md overflow-hidden',
-  levelItem: 'relative flex items-center justify-between border-b border-gray-100 last:border-b-0',
+  section: 'space-y-0 border border-slate-700 rounded-md overflow-hidden',
+  levelItem: 'relative flex items-center justify-between border-b border-slate-700 last:border-b-0',
 } as const;
 
 export const TEXT_CLASSES = {
   price: 'font-mono font-medium transition-colors',
-  size: 'font-mono text-gray-700 font-medium',
-  percentage: 'text-gray-500 font-medium',
-  title: 'text-sm font-medium text-gray-700',
-  subtitle: 'text-xs text-gray-500',
+  size: 'font-mono text-slate-100 font-medium',
+  percentage: 'text-cyan-200 font-medium',
+  title: 'text-sm font-medium text-slate-100',
+  subtitle: 'text-xs text-slate-300',
 } as const;

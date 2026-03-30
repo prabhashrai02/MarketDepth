@@ -20,7 +20,6 @@ export const OrderBookLevelItem: React.FC<OrderBookLevelItemProps> = ({
   level,
   type,
   percentage,
-  index,
   className = '',
   showVenue = true,
   showPercentage = true,
@@ -36,16 +35,15 @@ export const OrderBookLevelItem: React.FC<OrderBookLevelItemProps> = ({
   };
 
   const interactiveClasses = interactive 
-    ? 'hover:bg-gray-50 transition-all duration-200 cursor-pointer' 
+    ? 'hover:bg-slate-800 transition-all duration-200 cursor-pointer' 
     : '';
 
   return (
     <div
-      className={`relative flex items-center justify-between ${sizeClasses[size]} ${interactiveClasses} border-b border-gray-100 last:border-b-0 order-book-level animate-fade-in ${className}`}
-      style={{ animationDelay: `${index * 0.05}s` }}
+      className={`relative flex items-center justify-between ${sizeClasses[size]} ${interactiveClasses} border-b border-slate-700 last:border-b-0 order-book-level ${className}`}
     >
       <div
-        className={`absolute left-0 top-0 h-full ${styles.bgColor} opacity-10 transition-all duration-300 ease-out`}
+        className={`absolute left-0 top-0 h-full ${styles.bgColor} opacity-20`}
         style={{ width: `${percentage}%` }}
       />
       <div className="flex items-center space-x-3 z-10">
@@ -55,11 +53,11 @@ export const OrderBookLevelItem: React.FC<OrderBookLevelItemProps> = ({
         {showVenue && <VenueIndicator venue={level.venue} />}
       </div>
       <div className="flex items-center space-x-3 z-10">
-        <span className="font-mono text-gray-700 font-medium">
+        <span className="font-mono text-slate-100 font-medium">
           {formatSize(level.size)}
         </span>
         {showPercentage && (
-          <span className="text-gray-500 font-medium">
+          <span className="text-slate-300 font-medium">
             {formatPercentage(percentage)}
           </span>
         )}
