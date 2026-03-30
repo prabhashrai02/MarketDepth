@@ -47,15 +47,12 @@ export default function useKalshiMarket(markets: MarketInput) {
 
   const [tickerData, setTickerData] = useState<TickerMap>({});
   const [status, setStatus] = useState<Status>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const wsError: string | null = null;
 
   useEffect(() => {
     if (requestedMarkets.length === 0) {
-      setError('No market ticker provided');
       return;
     }
-
-    setStatus('connecting');
 
     kalshiWs.connect();
     kalshiWs.subscribe(requestedMarkets);
@@ -95,10 +92,19 @@ export default function useKalshiMarket(markets: MarketInput) {
     };
   }, [requestedMarkets]);
 
+  if (requestedMarkets.length === 0) {
+    return {
+      data: {},
+      status: 'idle',
+      error: 'No market ticker provided',
+      markets: [],
+    };
+  }
+
   return {
     data: tickerData,
     status,
-    error,
+    error: wsError,
     markets: requestedMarkets,
   };
 }

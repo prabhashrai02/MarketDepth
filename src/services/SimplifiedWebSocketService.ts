@@ -3,7 +3,7 @@ export interface SimplifiedWebSocketConfig {
   venue: 'polymarket' | 'kalshi';
   marketId?: string;
   assetIds?: string[];
-  onMessage: (data: any) => void;
+  onMessage: (data: unknown) => void;
   onError: (error: string) => void;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -15,7 +15,7 @@ export class SimplifiedWebSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
-  private pingInterval: any = null;
+  private pingInterval: number | null = null;
 
   constructor(config: SimplifiedWebSocketConfig) {
     this.config = config;
@@ -34,25 +34,9 @@ export class SimplifiedWebSocketService {
         this.config.onConnect();
 
         this.subscribe();
-        this.startHeartbeat(); // ✅ FIX: heartbeat added
+        this.startHeartbeat();
       };
 
-      // this.ws.onmessage = (event) => {
-      //   try {
-      //     const parsed = JSON.parse(event.data);
-
-      //     console.log('RAW WS:', parsed); // ✅ DEBUG
-
-      //     // ✅ FIX: handle array responses
-      //     if (Array.isArray(parsed)) {
-      //       parsed.forEach((msg) => this.config.onMessage(msg));
-      //     } else {
-      //       this.config.onMessage(parsed);
-      //     }
-      //   } catch (error) {
-      //     this.config.onError(`Failed to parse message: ${error}`);
-      //   }
-      // };
 
       this.ws.onmessage = (event) => {
         const raw = event.data;
@@ -67,7 +51,7 @@ export class SimplifiedWebSocketService {
 
         try {
           parsed = JSON.parse(raw);
-        } catch (err) {
+        } catch {
           console.warn('⚠️ Skipping non-JSON message:', raw);
           return; // ✅ prevent crash
         }
@@ -198,9 +182,13 @@ export class SimplifiedWebSocketService {
     setTimeout(() => this.connect(), delay);
   }
 
-  send(message: any): void {
+  send(message: unknown): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      try {
+        this.ws.send(JSON.stringify(message));
+      } catch (error) {
+        console.warn('Could not send WS message', error);
+      }
     }
   }
 

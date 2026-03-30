@@ -2,17 +2,14 @@
  * Formatting utilities for market data display
  */
 
-// export const formatPrice = (price: number | undefined | null): string => {
-//   if (price === undefined || price === null || isNaN(price)) {
-//     return '$—';
-//   }
-//   return `$${price.toFixed(3)}`;
-// };
+export function formatPrice(price: number | string | null | undefined): string {
+  if (price === null || price === undefined || price === '') {
+    return '—';
+  }
 
-export function formatPrice(price: any): string {
   const num = Number(price);
 
-  if (isNaN(num)) return "-";
+  if (Number.isNaN(num)) return '—';
 
   return num.toFixed(3);
 }

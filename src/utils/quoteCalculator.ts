@@ -102,9 +102,11 @@ export const calculateQuote = (
     unfilledAmount: combinedResult.unfilledUsd,
     bestPrice,
     venueBreakdown: {
-      polymarket: normalizeVenueQuote(polyResult, polymarketLevels.length),
-      kalshi: normalizeVenueQuote(kalResult, kalshiLevels.length),
+      polymarket: normalizeVenueQuote(polyResult),
+      kalshi: normalizeVenueQuote(kalResult),
     },
     routing: combinedResult.routing,
   };
 };
+
+

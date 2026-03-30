@@ -37,7 +37,7 @@ export interface MarketStore {
   cleanup: () => void;
 }
 
-export const useMarketStore = create<MarketStore>((set: any, get: any) => ({
+export const useMarketStore = create<MarketStore>((set, get) => ({
   orderBook: initialOrderBook,
   polymarketOrderBook: initialOrderBook,
   kalshiOrderBook: initialOrderBook,
@@ -77,7 +77,7 @@ export const useMarketStore = create<MarketStore>((set: any, get: any) => ({
     const store = get();
     store.setLoading(true);
 
-    let kalshiOrderBookState = {
+    const kalshiOrderBookState = {
       yes: new Map<number, number>(),
       no: new Map<number, number>(),
     };
@@ -92,18 +92,20 @@ export const useMarketStore = create<MarketStore>((set: any, get: any) => ({
       onMessage: (data) => {
         if (data && typeof data === 'object') {
           const book: OrderBook = {
-            bids:
-              (data.bids || []).map((b: any) => ({
-                price: Number(b.price),
-                size: Number(b.size),
-                venue: 'polymarket',
-              })) || [],
-            asks:
-              (data.asks || []).map((a: any) => ({
-                price: Number(a.price),
-                size: Number(a.size),
-                venue: 'polymarket',
-              })) || [],
+            bids: Array.isArray(data.bids)
+              ? data.bids.map((b: { price: number | string; size: number | string }) => ({
+                  price: Number(b.price),
+                  size: Number(b.size),
+                  venue: 'polymarket',
+                }))
+              : [],
+            asks: Array.isArray(data.asks)
+              ? data.asks.map((a: { price: number | string; size: number | string }) => ({
+                  price: Number(a.price),
+                  size: Number(a.size),
+                  venue: 'polymarket',
+                }))
+              : [],
             lastUpdate: new Date(),
             venueStatus: {
               polymarket: 'connected',
@@ -128,29 +130,40 @@ export const useMarketStore = create<MarketStore>((set: any, get: any) => ({
 
     wsService.connect();
 
-    const handleKalshiMessage = (data: any) => {
+    const handleKalshiMessage = (data: unknown) => {
       if (!data || typeof data !== 'object') return;
+      const payload = data as {
+        type?: string;
+        msg?: {
+          yes_dollars_fp?: Array<[string, string]>;
+          no_dollars_fp?: Array<[string, string]>;
+          side?: 'yes' | 'no';
+          price_dollars?: string | number;
+          delta_fp?: string | number;
+        };
+        yes_dollars_fp?: Array<[string, string]>;
+        no_dollars_fp?: Array<[string, string]>;
+      };
 
       // 🟢 SNAPSHOT
-      if (data.type === 'orderbook_snapshot') {
+      if (payload.type === 'orderbook_snapshot') {
         kalshiOrderBookState.yes.clear();
         kalshiOrderBookState.no.clear();
 
-        data.msg.yes_dollars_fp?.forEach(([p, s]: [string, string]) => {
+        payload.msg?.yes_dollars_fp?.forEach(([p, s]) => {
           kalshiOrderBookState.yes.set(Number(p), Number(s));
         });
 
-        data.msg.no_dollars_fp?.forEach(([p, s]: [string, string]) => {
+        payload.msg?.no_dollars_fp?.forEach(([p, s]) => {
           kalshiOrderBookState.no.set(Number(p), Number(s));
         });
       }
 
       // 🟡 DELTA
-      if (data.type === 'orderbook_delta') {
-        const { side, price_dollars, delta_fp } = data.msg;
-
-        const price = Number(price_dollars);
-        const delta = Number(delta_fp);
+      if (payload.type === 'orderbook_delta') {
+        const side = payload.msg?.side;
+        const price = Number(payload.msg?.price_dollars ?? 0);
+        const delta = Number(payload.msg?.delta_fp ?? 0);
 
         const bookSide =
           side === 'yes' ? kalshiOrderBookState.yes : kalshiOrderBookState.no;
