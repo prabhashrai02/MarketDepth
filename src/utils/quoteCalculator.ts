@@ -1,68 +1,110 @@
-import type { OrderBook, QuoteRequest, QuoteResult, VenueFill } from '../types/market';
+import type { OrderBookLevel, QuoteResult, QuoteSide, VenueQuoteResult } from '@/types/market';
 
-export class QuoteCalculator {
-  static calculateQuote(orderBook: OrderBook, request: QuoteRequest): QuoteResult {
-    const { amount, side } = request;
-    const levels = side === 'buy' ? orderBook.asks : orderBook.bids;
-    
-    let remainingAmount = amount;
-    let totalShares = 0;
-    let totalCost = 0;
-    const venueBreakdown = {
-      polymarket: { shares: 0, price: 0, cost: 0, available: false },
-      kalshi: { shares: 0, price: 0, cost: 0, available: false }
-    };
+const sortLevels = (levels: OrderBookLevel[], side: QuoteSide): OrderBookLevel[] => {
+  if (side === 'buy') {
+    return [...levels].sort((a, b) => a.price - b.price);
+  }
+  return [...levels].sort((a, b) => b.price - a.price);
+};
 
-    const venueLevels = {
-      polymarket: levels.filter(level => level.venue === 'polymarket' || level.venue === 'combined'),
-      kalshi: levels.filter(level => level.venue === 'kalshi' || level.venue === 'combined')
-    };
+const executeAcrossLevels = (
+  amountUsd: number,
+  levels: OrderBookLevel[],
+): {
+  totalShares: number;
+  totalCost: number;
+  filledUsd: number;
+  unfilledUsd: number;
+  bestPrice: number;
+  routing: Array<{ venue: 'polymarket' | 'kalshi'; price: number; size: number; cost: number }>;
+} => {
+  let remaining = amountUsd;
+  let totalShares = 0;
+  let totalCost = 0;
+  let bestPrice = 0;
+  const routing: Array<{ venue: 'polymarket' | 'kalshi'; price: number; size: number; cost: number }> = [];
 
-    for (const level of levels) {
-      if (remainingAmount <= 0) break;
-
-      const maxCost = Math.min(remainingAmount, level.size * level.price);
-      const shares = maxCost / level.price;
-      
-      totalShares += shares;
-      totalCost += maxCost;
-      remainingAmount -= maxCost;
-
-      if (level.venue === 'polymarket' || level.venue === 'combined') {
-        venueBreakdown.polymarket.shares += shares;
-        venueBreakdown.polymarket.cost += maxCost;
-        venueBreakdown.polymarket.available = true;
-      }
-      
-      if (level.venue === 'kalshi' || level.venue === 'combined') {
-        venueBreakdown.kalshi.shares += shares;
-        venueBreakdown.kalshi.cost += maxCost;
-        venueBreakdown.kalshi.available = true;
-      }
-    }
-
-    const averagePrice = totalShares > 0 ? totalCost / totalShares : 0;
-    const slippage = this.calculateSlippage(levels, averagePrice);
-
-    venueBreakdown.polymarket.price = venueBreakdown.polymarket.shares > 0 ? 
-      venueBreakdown.polymarket.cost / venueBreakdown.polymarket.shares : 0;
-    
-    venueBreakdown.kalshi.price = venueBreakdown.kalshi.shares > 0 ? 
-      venueBreakdown.kalshi.cost / venueBreakdown.kalshi.shares : 0;
-
-    return {
-      totalShares: Math.round(totalShares * 100) / 100,
-      averagePrice: Math.round(averagePrice * 10000) / 10000,
-      totalCost: Math.round(totalCost * 100) / 100,
-      venueBreakdown,
-      slippage: Math.round(slippage * 10000) / 10000
-    };
+  if (levels.length === 0) {
+    return { totalShares, totalCost, filledUsd: 0, unfilledUsd: amountUsd, bestPrice: 0, routing };
   }
 
-  private static calculateSlippage(levels: OrderBookLevel[], averagePrice: number): number {
-    if (levels.length === 0) return 0;
-    
-    const bestPrice = levels[0].price;
-    return Math.abs((averagePrice - bestPrice) / bestPrice);
+  bestPrice = levels[0].price;
+
+  for (const level of levels) {
+    if (remaining <= 0) break;
+
+    const maxSharesByAmount = remaining / level.price;
+    const fillSize = Math.min(level.size, maxSharesByAmount);
+    if (fillSize <= 0) break;
+
+    const cost = fillSize * level.price;
+
+    routing.push({
+      venue: level.venue as 'polymarket' | 'kalshi',
+      price: level.price,
+      size: fillSize,
+      cost,
+    });
+
+    totalShares += fillSize;
+    totalCost += cost;
+    remaining -= cost;
   }
-}
+
+  return {
+    totalShares,
+    totalCost,
+    filledUsd: amountUsd - Math.max(0, remaining),
+    unfilledUsd: Math.max(0, remaining),
+    bestPrice,
+    routing,
+  };
+};
+
+const normalizeVenueQuote = (
+  raw: ReturnType<typeof executeAcrossLevels>
+): VenueQuoteResult => {
+  const avgPrice = raw.totalShares > 0 ? raw.totalCost / raw.totalShares : 0;
+  return {
+    available: raw.totalShares > 0,
+    shares: raw.totalShares,
+    cost: raw.totalCost,
+    avgPrice,
+    unfilledAmount: raw.unfilledUsd,
+  };
+};
+
+export const calculateQuote = (
+  amountUsd: number,
+  side: QuoteSide,
+  polymarketLevels: OrderBookLevel[],
+  kalshiLevels: OrderBookLevel[],
+  combinedLevels: OrderBookLevel[],
+): QuoteResult => {
+  const polymarketSorted = sortLevels(polymarketLevels, side);
+  const kalshiSorted = sortLevels(kalshiLevels, side);
+  const combinedSorted = sortLevels(combinedLevels, side);
+
+  const polyResult = executeAcrossLevels(amountUsd, polymarketSorted);
+  const kalResult = executeAcrossLevels(amountUsd, kalshiSorted);
+  const combinedResult = executeAcrossLevels(amountUsd, combinedSorted);
+
+  const avgPrice = combinedResult.totalShares > 0 ? combinedResult.totalCost / combinedResult.totalShares : 0;
+
+  const bestPrice = combinedResult.bestPrice;
+  const slippage = bestPrice > 0 ? ((avgPrice - bestPrice) / bestPrice) * 100 : 0;
+
+  return {
+    totalShares: combinedResult.totalShares,
+    totalCost: combinedResult.totalCost,
+    averagePrice: avgPrice,
+    slippage,
+    unfilledAmount: combinedResult.unfilledUsd,
+    bestPrice,
+    venueBreakdown: {
+      polymarket: normalizeVenueQuote(polyResult, polymarketLevels.length),
+      kalshi: normalizeVenueQuote(kalResult, kalshiLevels.length),
+    },
+    routing: combinedResult.routing,
+  };
+};

@@ -1,9 +1,31 @@
-import type { Venue, ConnectionStatus, Side, MessageType } from '../constants';
-
 export interface OrderBookLevel {
   price: number;
   size: number;
-  venue: Venue | 'combined';
+  venue: 'polymarket' | 'kalshi' | 'combined';
+}
+
+export type QuoteSide = 'buy' | 'sell';
+
+export interface VenueQuoteResult {
+  available: boolean;
+  shares: number;
+  cost: number;
+  avgPrice: number;
+  unfilledAmount: number;
+}
+
+export interface QuoteResult {
+  totalShares: number;
+  totalCost: number;
+  averagePrice: number;
+  slippage: number;
+  unfilledAmount: number;
+  bestPrice: number;
+  venueBreakdown: {
+    polymarket: VenueQuoteResult;
+    kalshi: VenueQuoteResult;
+  };
+  routing: Array<{ venue: 'polymarket' | 'kalshi'; price: number; size: number; cost: number }>;
 }
 
 export interface OrderBook {
@@ -11,60 +33,7 @@ export interface OrderBook {
   asks: OrderBookLevel[];
   lastUpdate: Date;
   venueStatus: {
-    polymarket: ConnectionStatus;
-    kalshi: ConnectionStatus;
+    polymarket: 'connected' | 'disconnected' | 'error' | 'connecting';
+    kalshi: 'connected' | 'disconnected' | 'error' | 'connecting';
   };
-}
-
-export interface Market {
-  id: string;
-  title: string;
-  description: string;
-  outcomes: Outcome[];
-  expirationDate: Date;
-}
-
-export interface Outcome {
-  id: string;
-  title: string;
-  currentPrice: number;
-  orderBook: OrderBook;
-}
-
-export interface QuoteRequest {
-  amount: number;
-  outcomeId: string;
-  side: Side;
-}
-
-export interface QuoteResult {
-  totalShares: number;
-  averagePrice: number;
-  totalCost: number;
-  venueBreakdown: {
-    polymarket: VenueFill;
-    kalshi: VenueFill;
-  };
-  slippage: number;
-}
-
-export interface VenueFill {
-  shares: number;
-  price: number;
-  cost: number;
-  available: boolean;
-}
-
-export interface WebSocketMessage {
-  type: MessageType;
-  venue: Venue;
-  data?: any;
-  timestamp: Date;
-}
-
-export interface MarketData {
-  market: Market;
-  selectedOutcome: Outcome;
-  quoteRequest?: QuoteRequest;
-  quoteResult?: QuoteResult;
 }

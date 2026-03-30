@@ -1,6 +1,6 @@
-import type { OrderBook, OrderBookLevel } from '../types/market';
-import type { ConnectionStatus, OrderBookSide } from '../constants';
-import { POLYMARKET, KALSHI, DISCONNECTED, BIDS, ASKS, COMBINED } from '../constants';
+import { POLYMARKET, KALSHI, BIDS, ASKS, DISCONNECTED, type OrderBookSide, COMBINED, type ConnectionStatus } from "@/constants";
+import type { OrderBook, OrderBookLevel } from "@/types/market";
+
 
 export class OrderBookAggregator {
   private polymarketBook: OrderBook | null = null;
@@ -51,7 +51,7 @@ export class OrderBookAggregator {
     });
 
     const sorted = Array.from(grouped.values());
-    return sorted.sort((a, b) => 
+    return sorted.sort((a, b) =>
       side === BIDS ? b.price - a.price : a.price - b.price
     );
   }
