@@ -5,6 +5,25 @@ import type { OrderBook, OrderBookLevel } from "@/types/market";
 export class OrderBookAggregator {
   private polymarketBook: OrderBook | null = null;
   private kalshiBook: OrderBook | null = null;
+  private static readonly MAX_LEVELS = 200;
+
+  reset(): void {
+    this.polymarketBook = null;
+    this.kalshiBook = null;
+  }
+
+  private normalizeBook(book?: OrderBook | null): OrderBook {
+    if (!book) {
+      return { bids: [], asks: [], lastUpdate: new Date(0), venueStatus: { polymarket: DISCONNECTED, kalshi: DISCONNECTED }};
+    }
+
+    return {
+      bids: this.combineAndSortLevels(book.bids, BIDS),
+      asks: this.combineAndSortLevels(book.asks, ASKS),
+      lastUpdate: book.lastUpdate || new Date(),
+      venueStatus: book.venueStatus,
+    };
+  }
 
   updateOrderBook(venue: typeof POLYMARKET | typeof KALSHI, orderBook: OrderBook): void {
     if (venue === POLYMARKET) {
@@ -15,11 +34,16 @@ export class OrderBookAggregator {
   }
 
   getCombinedOrderBook(): OrderBook {
-    const polymarketBids = this.polymarketBook?.bids || [];
-    const polymarketAsks = this.polymarketBook?.asks || [];
-    const kalshiBids = this.kalshiBook?.bids || [];
-    const kalshiAsks = this.kalshiBook?.asks || [];
+    const polymarketBook = this.normalizeBook(this.polymarketBook);
+    const kalshiBook = this.normalizeBook(this.kalshiBook);
 
+    const isPolyConnected = polymarketBook.venueStatus.polymarket === 'connected';
+    const isKalshiConnected = kalshiBook.venueStatus.kalshi === 'connected';
+
+    const polymarketBids = isPolyConnected ? polymarketBook.bids : [];
+    const polymarketAsks = isPolyConnected ? polymarketBook.asks : [];
+    const kalshiBids = isKalshiConnected ? kalshiBook.bids : [];
+    const kalshiAsks = isKalshiConnected ? kalshiBook.asks : [];
     const combinedBids = this.combineAndSortLevels([...polymarketBids, ...kalshiBids], BIDS);
     const combinedAsks = this.combineAndSortLevels([...polymarketAsks, ...kalshiAsks], ASKS);
 
@@ -73,8 +97,7 @@ export class OrderBookAggregator {
     );
 
     // Keep the book bounded for long-running sessions and to avoid memory blow-up
-    const MAX_LEVELS = 200;
-    return sorted.slice(0, MAX_LEVELS);
+    return sorted.slice(0, OrderBookAggregator.MAX_LEVELS);
   }
 
   getVenueStatus(): { polymarket: ConnectionStatus; kalshi: ConnectionStatus } {

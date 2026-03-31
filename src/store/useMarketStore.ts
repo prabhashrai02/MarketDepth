@@ -5,6 +5,24 @@ import { OrderBookAggregator } from '@/utils/orderBookAggregator';
 import type { OrderBook } from '@/types/market';
 import type { ConnectionStatus } from '@/constants';
 
+type RawKalshiPayload = {
+  type?: string;
+  msg?: {
+    yes_dollars_fp?: Array<[string | number, string | number]>;
+    no_dollars_fp?: Array<[string | number, string | number]>;
+    side?: 'yes' | 'no';
+    price_dollars?: string | number;
+    delta_fp?: string | number;
+  };
+  yes_dollars_fp?: Array<[string | number, string | number]>;
+  no_dollars_fp?: Array<[string | number, string | number]>;
+  yes?: Array<[string | number, string | number]>;
+  no?: Array<[string | number, string | number]>;
+  side?: 'yes' | 'no';
+  price_dollars?: string | number;
+  delta_fp?: string | number;
+};
+
 const aggregator = new OrderBookAggregator();
 let wsService: SimplifiedWebSocketService | null = null;
 let kalshiWsOff: (() => void) | null = null;
@@ -19,6 +37,27 @@ const initialOrderBook: OrderBook = {
   },
 };
 
+const MAX_ORDERBOOK_LEVELS = 200;
+
+const trimLevels = (levels: Array<{ price: number; size: number; venue: string }>, side: 'bids' | 'asks') => {
+  const sorted = [...levels].sort((a, b) => (side === 'bids' ? b.price - a.price : a.price - b.price));
+  return sorted.slice(0, MAX_ORDERBOOK_LEVELS);
+};
+
+const prunePriceMap = (bookSide: Map<number, number>, side: 'bids' | 'asks') => {
+  if (bookSide.size <= MAX_ORDERBOOK_LEVELS) return;
+
+  const sortedEntries = Array.from(bookSide.entries()).sort((a, b) =>
+    side === 'bids' ? b[0] - a[0] : a[0] - b[0],
+  );
+
+  bookSide.clear();
+
+  sortedEntries.slice(0, MAX_ORDERBOOK_LEVELS).forEach(([price, size]) => {
+    if (size > 0) bookSide.set(price, size);
+  });
+};
+
 const sanitizeLevels = (levels: Array<{ price: number; size: number; venue: string }>) =>
   levels
     .map((lvl) => ({
@@ -27,7 +66,6 @@ const sanitizeLevels = (levels: Array<{ price: number; size: number; venue: stri
       venue: lvl.venue as 'polymarket' | 'kalshi' | 'combined',
     }))
     .filter((lvl) => Number.isFinite(lvl.price) && Number.isFinite(lvl.size) && lvl.price > 0 && lvl.size > 0);
-
 export interface MarketStore {
   orderBook: OrderBook;
   polymarketOrderBook: OrderBook;
@@ -64,7 +102,27 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
   updateOrderBook: (venue, book) => {
     const timestamp = new Date();
 
-    aggregator.updateOrderBook(venue, book);
+    const prunedBook: OrderBook = {
+      ...book,
+      bids: trimLevels(book.bids, 'bids'),
+      asks: trimLevels(book.asks, 'asks'),
+    };
+
+    // No-op for stagnant empty updates to avoid unnecessary render churn on long-running sessions.
+    // Preserve explicit resets where multi-venue data disappears.
+    const existingVenueBook =
+      venue === 'polymarket' ? get().polymarketOrderBook : get().kalshiOrderBook;
+
+    if (
+      prunedBook.bids.length === 0 &&
+      prunedBook.asks.length === 0 &&
+      existingVenueBook.bids.length === 0 &&
+      existingVenueBook.asks.length === 0
+    ) {
+      return;
+    }
+
+    aggregator.updateOrderBook(venue, prunedBook);
     const combined = aggregator.getCombinedOrderBook();
 
     const nextState: Partial<MarketStore> = {
@@ -76,11 +134,11 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
     };
 
     if (venue === 'polymarket') {
-      nextState.polymarketOrderBook = book;
+      nextState.polymarketOrderBook = prunedBook;
     }
 
     if (venue === 'kalshi') {
-      nextState.kalshiOrderBook = book;
+      nextState.kalshiOrderBook = prunedBook;
     }
 
     set(nextState as MarketStore);
@@ -92,8 +150,13 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
 
   initialize: () => {
     const store = get();
-    store.setLoading(true);
 
+    // Reset existing connections to avoid leaks on repeated initialize calls
+    if (wsService || kalshiWsOff) {
+      store.cleanup();
+    }
+
+    store.setLoading(true);
     store.setConnectionStatus('polymarket', 'connecting');
     store.setConnectionStatus('kalshi', 'connecting');
 
@@ -156,53 +219,63 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
 
     const handleKalshiMessage = (data: unknown) => {
       if (!data || typeof data !== 'object') return;
-      const payload = data as {
-        type?: string;
-        msg?: {
-          yes_dollars_fp?: Array<[string, string]>;
-          no_dollars_fp?: Array<[string, string]>;
-          side?: 'yes' | 'no';
-          price_dollars?: string | number;
-          delta_fp?: string | number;
-        };
-        yes_dollars_fp?: Array<[string, string]>;
-        no_dollars_fp?: Array<[string, string]>;
-      };
+      const payload = data as RawKalshiPayload;
 
-      // 🟢 SNAPSHOT
-      if (payload.type === 'orderbook_snapshot') {
+      const type = String(payload.type ?? '').toLowerCase();
+      const msg = payload.msg;
+
+      const yesSnapshot = msg?.yes_dollars_fp ?? payload.yes_dollars_fp ?? payload.yes ?? [];
+      const noSnapshot = msg?.no_dollars_fp ?? payload.no_dollars_fp ?? payload.no ?? [];
+
+      const snapshotPairs = (items: Array<unknown>) =>
+        items
+          .filter((entry) => Array.isArray(entry) && (entry as unknown[]).length >= 2)
+          .map((entry) => (entry as unknown[]) as [unknown, unknown]);
+
+      const hasSnapshotData = snapshotPairs(yesSnapshot).length > 0 || snapshotPairs(noSnapshot).length > 0;
+
+      if (type === 'orderbook_snapshot' || (type === 'orderbook_delta' && hasSnapshotData)) {
         kalshiOrderBookState.yes.clear();
         kalshiOrderBookState.no.clear();
 
-        payload.msg?.yes_dollars_fp?.forEach(([p, s]) => {
-          kalshiOrderBookState.yes.set(Number(p), Number(s));
+        snapshotPairs(yesSnapshot).forEach(([p, s]) => {
+          const price = Number(p);
+          const size = Number(s);
+          if (Number.isFinite(price) && price > 0 && Number.isFinite(size) && size > 0) {
+            kalshiOrderBookState.yes.set(price, size);
+          }
         });
 
-        payload.msg?.no_dollars_fp?.forEach(([p, s]) => {
-          kalshiOrderBookState.no.set(Number(p), Number(s));
+        snapshotPairs(noSnapshot).forEach(([p, s]) => {
+          const price = Number(p);
+          const size = Number(s);
+          if (Number.isFinite(price) && price > 0 && Number.isFinite(size) && size > 0) {
+            kalshiOrderBookState.no.set(price, size);
+          }
         });
+
+        prunePriceMap(kalshiOrderBookState.yes, 'bids');
+        prunePriceMap(kalshiOrderBookState.no, 'asks');
       }
 
-      // 🟡 DELTA
-      if (payload.type === 'orderbook_delta') {
-        const side = payload.msg?.side;
-        const price = Number(payload.msg?.price_dollars ?? NaN);
-        const delta = Number(payload.msg?.delta_fp ?? NaN);
+      if (type === 'orderbook_delta') {
+        const deltaSide = String(msg?.side ?? payload.side ?? '').toLowerCase();
+        const deltaPrice = Number(msg?.price_dollars ?? payload.price_dollars ?? NaN);
+        const deltaSize = Number(msg?.delta_fp ?? payload.delta_fp ?? NaN);
 
-        if (!Number.isFinite(price) || !Number.isFinite(delta) || price <= 0 || delta === 0) {
-          // ignore invalid/empty updates
-        } else {
-          const bookSide =
-            side === 'yes' ? kalshiOrderBookState.yes : kalshiOrderBookState.no;
-
-          const current = bookSide.get(price) || 0;
-          const next = current + delta;
+        if ((deltaSide === 'yes' || deltaSide === 'no') && Number.isFinite(deltaPrice) && deltaPrice > 0 && Number.isFinite(deltaSize) && deltaSize !== 0) {
+          const bookSide = deltaSide === 'yes' ? kalshiOrderBookState.yes : kalshiOrderBookState.no;
+          const current = bookSide.get(deltaPrice) || 0;
+          const next = current + deltaSize;
 
           if (next <= 0) {
-            bookSide.delete(price);
+            bookSide.delete(deltaPrice);
           } else {
-            bookSide.set(price, next);
+            bookSide.set(deltaPrice, next);
           }
+
+          prunePriceMap(kalshiOrderBookState.yes, 'bids');
+          prunePriceMap(kalshiOrderBookState.no, 'asks');
         }
       }
 
@@ -257,9 +330,16 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
 
     kalshiWs.disconnect();
 
+    aggregator.reset();
+
     set({
+      orderBook: initialOrderBook,
+      polymarketOrderBook: initialOrderBook,
+      kalshiOrderBook: initialOrderBook,
       connectionStatus: { polymarket: 'disconnected', kalshi: 'disconnected' },
       lastVenueUpdate: { polymarket: null, kalshi: null },
+      isLoading: false,
+      error: null,
     });
   },
 }));

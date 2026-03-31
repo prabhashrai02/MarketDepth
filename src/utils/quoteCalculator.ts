@@ -81,6 +81,35 @@ export const calculateQuote = (
   kalshiLevels: OrderBookLevel[],
   combinedLevels: OrderBookLevel[],
 ): QuoteResult => {
+  const normalizedAmount = Number(amountUsd);
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    return {
+      totalShares: 0,
+      totalCost: 0,
+      averagePrice: 0,
+      slippage: 0,
+      unfilledAmount: normalizedAmount > 0 ? normalizedAmount : 0,
+      bestPrice: 0,
+      venueBreakdown: {
+        polymarket: {
+          available: false,
+          shares: 0,
+          cost: 0,
+          avgPrice: 0,
+          unfilledAmount: normalizedAmount > 0 ? normalizedAmount : 0,
+        },
+        kalshi: {
+          available: false,
+          shares: 0,
+          cost: 0,
+          avgPrice: 0,
+          unfilledAmount: normalizedAmount > 0 ? normalizedAmount : 0,
+        },
+      },
+      routing: [],
+    };
+  }
+
   const polymarketSorted = sortLevels(polymarketLevels, side);
   const kalshiSorted = sortLevels(kalshiLevels, side);
   const combinedSorted = sortLevels(combinedLevels, side);
