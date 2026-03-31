@@ -19,6 +19,8 @@ interface OrderBookDisplayProps {
 const renderStatusHeader = (
   polymarketStatus: ConnectionStatus,
   kalshiStatus: ConnectionStatus,
+  polymarketLastUpdate?: Date | null,
+  kalshiLastUpdate?: Date | null,
 ) => (
   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div>
@@ -32,6 +34,8 @@ const renderStatusHeader = (
     <ConnectionStatusBanner
       polymarketStatus={polymarketStatus}
       kalshiStatus={kalshiStatus}
+      polymarketLastUpdate={polymarketLastUpdate}
+      kalshiLastUpdate={kalshiLastUpdate}
     />
   </div>
 );
@@ -163,6 +167,9 @@ export const OrderBookDisplay: React.FC<OrderBookDisplayProps> = ({
   const connectionStatus = useMarketStore(
     (state: MarketStore) => state.connectionStatus,
   );
+  const lastVenueUpdate = useMarketStore(
+    (state: MarketStore) => state.lastVenueUpdate,
+  );
   const { bestBid, bestAsk, spread, midpoint } = calculateMarketMetrics(
     orderBook.bids,
     orderBook.asks,
@@ -181,8 +188,20 @@ export const OrderBookDisplay: React.FC<OrderBookDisplayProps> = ({
     <div
       className={`bg-[#0e162a] border border-[#1f2a45] rounded-2xl shadow-[0_15px_35px_rgba(0,0,0,0.35)] p-4 ${className}`}
     >
-      {renderStatusHeader(connectionStatus.polymarket, connectionStatus.kalshi)}
+      {renderStatusHeader(
+        connectionStatus.polymarket,
+        connectionStatus.kalshi,
+        lastVenueUpdate.polymarket,
+        lastVenueUpdate.kalshi,
+      )}
       {renderMarketSummary(bestBid, bestAsk, spread, midpoint)}
+      {orderBook.crossed && (
+        <div className="mb-3 rounded-lg border border-rose-500/30 bg-rose-950/30 p-3 text-sm text-rose-300">
+          ⚠️ Crossed market detected: best bid is above best ask. The order book
+          levels are inconsistent across venues and may include out-of-sync
+          snapshots.
+        </div>
+      )}
       {renderVenueComparison(polymarketMetrics, kalshiMetrics, {
         bestBid,
         bestAsk,

@@ -1,18 +1,40 @@
+import React, { useEffect, useState } from 'react';
 import type { ConnectionStatus } from '../../../constants';
 
 interface ConnectionStatusBannerProps {
   polymarketStatus: ConnectionStatus;
   kalshiStatus: ConnectionStatus;
+  polymarketLastUpdate?: Date | null;
+  kalshiLastUpdate?: Date | null;
 }
+
+const STALE_THRESHOLD_MS = 12000; // mark stale after 12 seconds
 
 export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
   polymarketStatus,
   kalshiStatus,
+  polymarketLastUpdate,
+  kalshiLastUpdate,
 }) => {
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const hasConnectionIssues = 
     polymarketStatus === 'error' || kalshiStatus === 'error';
   const isDisconnected = 
     polymarketStatus === 'disconnected' && kalshiStatus === 'disconnected';
+
+  const isStale = (lastUpdate?: Date | null) => {
+    if (!lastUpdate) return false;
+    return currentTime - lastUpdate.getTime() > STALE_THRESHOLD_MS;
+  };
+
+  const polymarketStale = isStale(polymarketLastUpdate);
+  const kalshiStale = isStale(kalshiLastUpdate);
 
   const getConnectionStatusColor = (status: ConnectionStatus) => {
     switch (status) {
@@ -44,13 +66,23 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
     }
   };
 
-  if (hasConnectionIssues) {
+  if (hasConnectionIssues || polymarketStale || kalshiStale) {
     return (
       <div className="mb-4 p-3 bg-slate-800 border border-rose-500/40 rounded-md">
-        <div className="flex items-center">
+        <div className="flex flex-col gap-1">
           <span className="text-rose-300 text-sm">
             ⚠️ Connection issues detected. Some data may be unavailable.
           </span>
+          {polymarketStale && (
+            <span className="text-amber-200 text-xs">
+              Polymarket data is stale (no updates in 12s).
+            </span>
+          )}
+          {kalshiStale && (
+            <span className="text-amber-200 text-xs">
+              Kalshi data is stale (no updates in 12s).
+            </span>
+          )}
         </div>
       </div>
     );

@@ -23,37 +23,58 @@ export class OrderBookAggregator {
     const combinedBids = this.combineAndSortLevels([...polymarketBids, ...kalshiBids], BIDS);
     const combinedAsks = this.combineAndSortLevels([...polymarketAsks, ...kalshiAsks], ASKS);
 
+    const bestBid = combinedBids[0]?.price ?? 0;
+    const bestAsk = combinedAsks[0]?.price ?? 0;
+    const crossed = bestBid > bestAsk;
+
     return {
       bids: combinedBids,
       asks: combinedAsks,
       lastUpdate: new Date(),
+      crossed,
       venueStatus: {
         polymarket: this.polymarketBook?.venueStatus.polymarket || DISCONNECTED,
-        kalshi: this.kalshiBook?.venueStatus.kalshi || DISCONNECTED
-      }
+        kalshi: this.kalshiBook?.venueStatus.kalshi || DISCONNECTED,
+      },
     };
   }
 
   private combineAndSortLevels(levels: OrderBookLevel[], side: OrderBookSide): OrderBookLevel[] {
     const grouped = new Map<number, OrderBookLevel>();
 
-    levels.forEach(level => {
-      const existing = grouped.get(level.price);
+    levels.forEach((level) => {
+      const price = Number(level.price);
+      const size = Number(level.size);
+
+      // Skip invalid or non-positive values; aggregation should never produce negatives.
+      if (!Number.isFinite(price) || !Number.isFinite(size) || price <= 0 || size <= 0) {
+        return;
+      }
+
+      const existing = grouped.get(price);
+
       if (existing) {
-        existing.size += level.size;
+        existing.size += size;
+
+        if (existing.size <= 0) {
+          grouped.delete(price);
+        }
       } else {
-        grouped.set(level.price, {
-          price: level.price,
-          size: level.size,
-          venue: COMBINED
+        grouped.set(price, {
+          price,
+          size,
+          venue: COMBINED,
         });
       }
     });
 
-    const sorted = Array.from(grouped.values());
-    return sorted.sort((a, b) =>
+    const sorted = Array.from(grouped.values()).sort((a, b) =>
       side === BIDS ? b.price - a.price : a.price - b.price
     );
+
+    // Keep the book bounded for long-running sessions and to avoid memory blow-up
+    const MAX_LEVELS = 200;
+    return sorted.slice(0, MAX_LEVELS);
   }
 
   getVenueStatus(): { polymarket: ConnectionStatus; kalshi: ConnectionStatus } {

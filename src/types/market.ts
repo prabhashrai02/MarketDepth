@@ -32,8 +32,14 @@ export interface OrderBook {
   bids: OrderBookLevel[];
   asks: OrderBookLevel[];
   lastUpdate: Date;
+  crossed?: boolean;
   venueStatus: {
     polymarket: 'connected' | 'disconnected' | 'error' | 'connecting';
     kalshi: 'connected' | 'disconnected' | 'error' | 'connecting';
   };
 }
+
+export type VenueUpdate = {
+  timestamp: Date;
+  status: 'connected' | 'disconnecting' | 'disconnected' | 'error' | 'connecting';
+};

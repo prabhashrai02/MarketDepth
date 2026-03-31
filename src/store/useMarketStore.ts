@@ -19,11 +19,21 @@ const initialOrderBook: OrderBook = {
   },
 };
 
+const sanitizeLevels = (levels: Array<{ price: number; size: number; venue: string }>) =>
+  levels
+    .map((lvl) => ({
+      price: Number(lvl.price),
+      size: Number(lvl.size),
+      venue: lvl.venue as 'polymarket' | 'kalshi' | 'combined',
+    }))
+    .filter((lvl) => Number.isFinite(lvl.price) && Number.isFinite(lvl.size) && lvl.price > 0 && lvl.size > 0);
+
 export interface MarketStore {
   orderBook: OrderBook;
   polymarketOrderBook: OrderBook;
   kalshiOrderBook: OrderBook;
   connectionStatus: { polymarket: ConnectionStatus; kalshi: ConnectionStatus };
+  lastVenueUpdate: { polymarket: Date | null; kalshi: Date | null };
   isLoading: boolean;
   error: string | null;
   setConnectionStatus: (
@@ -42,6 +52,7 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
   polymarketOrderBook: initialOrderBook,
   kalshiOrderBook: initialOrderBook,
   connectionStatus: { polymarket: 'disconnected', kalshi: 'disconnected' },
+  lastVenueUpdate: { polymarket: null, kalshi: null },
   isLoading: true,
   error: null,
 
@@ -51,11 +62,17 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
     })),
 
   updateOrderBook: (venue, book) => {
+    const timestamp = new Date();
+
     aggregator.updateOrderBook(venue, book);
     const combined = aggregator.getCombinedOrderBook();
 
     const nextState: Partial<MarketStore> = {
       orderBook: combined,
+      lastVenueUpdate: {
+        ...get().lastVenueUpdate,
+        [venue]: timestamp,
+      },
     };
 
     if (venue === 'polymarket') {
@@ -77,6 +94,9 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
     const store = get();
     store.setLoading(true);
 
+    store.setConnectionStatus('polymarket', 'connecting');
+    store.setConnectionStatus('kalshi', 'connecting');
+
     const kalshiOrderBookState = {
       yes: new Map<number, number>(),
       no: new Map<number, number>(),
@@ -93,18 +113,22 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
         if (data && typeof data === 'object') {
           const book: OrderBook = {
             bids: Array.isArray(data.bids)
-              ? data.bids.map((b: { price: number | string; size: number | string }) => ({
-                  price: Number(b.price),
-                  size: Number(b.size),
-                  venue: 'polymarket',
-                }))
+              ? sanitizeLevels(
+                  data.bids.map((b: { price: number | string; size: number | string }) => ({
+                    price: Number(b.price),
+                    size: Number(b.size),
+                    venue: 'polymarket',
+                  })),
+                )
               : [],
             asks: Array.isArray(data.asks)
-              ? data.asks.map((a: { price: number | string; size: number | string }) => ({
-                  price: Number(a.price),
-                  size: Number(a.size),
-                  venue: 'polymarket',
-                }))
+              ? sanitizeLevels(
+                  data.asks.map((a: { price: number | string; size: number | string }) => ({
+                    price: Number(a.price),
+                    size: Number(a.size),
+                    venue: 'polymarket',
+                  })),
+                )
               : [],
             lastUpdate: new Date(),
             venueStatus: {
@@ -162,38 +186,42 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
       // 🟡 DELTA
       if (payload.type === 'orderbook_delta') {
         const side = payload.msg?.side;
-        const price = Number(payload.msg?.price_dollars ?? 0);
-        const delta = Number(payload.msg?.delta_fp ?? 0);
+        const price = Number(payload.msg?.price_dollars ?? NaN);
+        const delta = Number(payload.msg?.delta_fp ?? NaN);
 
-        const bookSide =
-          side === 'yes' ? kalshiOrderBookState.yes : kalshiOrderBookState.no;
-
-        const current = bookSide.get(price) || 0;
-        const next = current + delta;
-
-        if (next <= 0) {
-          bookSide.delete(price);
+        if (!Number.isFinite(price) || !Number.isFinite(delta) || price <= 0 || delta === 0) {
+          // ignore invalid/empty updates
         } else {
-          bookSide.set(price, next);
+          const bookSide =
+            side === 'yes' ? kalshiOrderBookState.yes : kalshiOrderBookState.no;
+
+          const current = bookSide.get(price) || 0;
+          const next = current + delta;
+
+          if (next <= 0) {
+            bookSide.delete(price);
+          } else {
+            bookSide.set(price, next);
+          }
         }
       }
 
       // 🔄 CONVERT → YOUR OrderBook FORMAT
-      const bids = Array.from(kalshiOrderBookState.yes.entries())
-        .map(([price, size]) => ({
+      const bids = sanitizeLevels(
+        Array.from(kalshiOrderBookState.yes.entries()).map(([price, size]) => ({
           price,
           size,
           venue: 'kalshi' as const,
-        }))
-        .sort((a, b) => b.price - a.price);
+        })),
+      ).sort((a, b) => b.price - a.price);
 
-      const asks = Array.from(kalshiOrderBookState.no.entries())
-        .map(([price, size]) => ({
+      const asks = sanitizeLevels(
+        Array.from(kalshiOrderBookState.no.entries()).map(([price, size]) => ({
           price,
           size,
           venue: 'kalshi' as const,
-        }))
-        .sort((a, b) => a.price - b.price);
+        })),
+      ).sort((a, b) => a.price - b.price);
 
       const kalshiBook: OrderBook = {
         bids,
@@ -228,5 +256,10 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
     }
 
     kalshiWs.disconnect();
+
+    set({
+      connectionStatus: { polymarket: 'disconnected', kalshi: 'disconnected' },
+      lastVenueUpdate: { polymarket: null, kalshi: null },
+    });
   },
 }));
