@@ -43,9 +43,116 @@ Designed to stay open for extended periods:
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         EXTERNAL APIs                               │
+│                                                                     │
+│   ┌─────────────────────────┐     ┌─────────────────────────────┐  │
+│   │       Polymarket        │     │          Kalshi             │  │
+│   │   CLOB WebSocket API    │     │   REST + WebSocket API      │  │
+│   │   (public, no auth)     │     │   (requires API key)        │  │
+│   └────────────┬────────────┘     └──────────────┬──────────────┘  │
+└────────────────│──────────────────────────────────│─────────────────┘
+                 │ WS messages                       │ authenticated requests
+                 │ raw price levels                  │
+                 │                    ┌──────────────▼──────────────┐
+                 │                    │       BACKEND PROXY         │
+                 │                    │      Node.js (port 3001)    │
+                 │                    │                             │
+                 │                    │  - signs requests w/ RSA    │
+                 │                    │  - proxies Kalshi WS feed   │
+                 │                    └──────────────┬──────────────┘
+                 │                                   │ proxied WS feed
+                 │                                   │
+┌────────────────▼───────────────────────────────────▼─────────────────┐
+│                          SERVICES LAYER                               │
+│                                                                       │
+│   ┌──────────────────────────────────────────────────────────────┐   │
+│   │              SimplifiedWebSocketService (base)               │   │
+│   │          heartbeat · reconnect · exponential backoff         │   │
+│   └──────────────────────┬───────────────────┬───────────────────┘   │
+│                  extends │                   │ extends                │
+│   ┌──────────────────────▼──────┐  ┌─────────▼──────────────────┐   │
+│   │       PolymarketWs          │  │         KalshiWs           │   │
+│   │                             │  │                            │   │
+│   │  - direct WS connection     │  │  - snapshot bootstrap      │   │
+│   │  - normalize 0–1 → cents    │  │  - buffer deltas until     │   │
+│   │  - emit OrderBook on update │  │    snapshot confirmed       │   │
+│   │                             │  │  - normalize to cents       │   │
+│   └──────────────┬──────────────┘  └─────────────┬──────────────┘   │
+└──────────────────│─────────────────────────────────│──────────────────┘
+                   │ normalized OrderBook             │ normalized OrderBook
+                   │                                  │
+┌──────────────────▼──────────────────────────────────▼─────────────────┐
+│                            CORE LOGIC                                  │
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐  │
+│   │                  orderBookAggregator.ts                        │  │
+│   │                                                                │  │
+│   │  1. validate  →  drop NaN / Infinity / negative values        │  │
+│   │  2. merge     →  combine levels at same price from both venues│  │
+│   │  3. sort      →  bids descending · asks ascending             │  │
+│   │  4. cap       →  trim to 200 levels per side                  │  │
+│   └─────────────────────────────┬──────────────────────────────────┘  │
+│                                 │ merged OrderBook                     │
+│   ┌─────────────────────────────▼──────────────────────────────────┐  │
+│   │                   quoteCalculator.ts                           │  │
+│   │                                                                │  │
+│   │  - walk price levels from best to worst                        │  │
+│   │  - simulate fill across combined book                          │  │
+│   │  - compute shares · avg price · slippage · unfilled amount     │  │
+│   │  - split fill attribution per venue                            │  │
+│   └─────────────────────────────┬──────────────────────────────────┘  │
+└─────────────────────────────────│──────────────────────────────────────┘
+                                  │ quote result
+┌─────────────────────────────────▼──────────────────────────────────────┐
+│                             STATE LAYER                                 │
+│                                                                         │
+│   ┌──────────────────────────────────────────────────────────────────┐ │
+│   │                  useMarketStore.ts  (Zustand)                    │ │
+│   │                                                                  │ │
+│   │    polymarketBook   ·   kalshiBook   ·   aggregatedBook          │ │
+│   │    polymarketStatus               ·   kalshiStatus               │ │
+│   └──────────┬──────────────────┬──────────────────┬─────────────────┘ │
+└──────────────│──────────────────│──────────────────│────────────────────┘
+               │                  │                  │ reads state
+┌──────────────▼──────────────────▼──────────────────▼────────────────────┐
+│                               UI LAYER                                   │
+│                                                                          │
+│   ┌────────────────────────────┐      ┌──────────────────────────────┐  │
+│   │    OrderBook component     │      │      QuoteEngine.tsx         │  │
+│   │                            │      │                              │  │
+│   │  per-venue books side      │      │  dollar input · side select  │  │
+│   │  by side + combined view   │      │  fill breakdown per venue    │  │
+│   │  connection status badges  │      │  routing table · slippage    │  │
+│   └────────────────────────────┘      └──────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### How data flows through the system
+
+The app has five distinct layers, each with a single job.
+
+**External APIs → Services**
+Polymarket's CLOB WebSocket is public, so `PolymarketWs` connects directly from the browser. Kalshi requires RSA-signed requests, so the Node.js backend handles auth and proxies the feed over a local WebSocket to `KalshiWs`. Both services extend `SimplifiedWebSocketService`, which owns all reconnect and heartbeat logic so neither venue client has to reimplement it.
+
+**Services → Core logic**
+Before any data reaches the aggregator, each service normalizes its venue's price format into a shared `OrderBook` type (prices always in cents, sizes always in shares). `PolymarketWs` multiplies raw prices by 100. `KalshiWs` applies the snapshot first, then buffers any deltas that arrive early until the snapshot is confirmed, then replays them in order. After normalization the two streams are identical in shape and the aggregator treats them the same.
+
+**Core logic → State**
+`orderBookAggregator.ts` is a pure function: it takes two `OrderBook` inputs and returns one merged `OrderBook`. It merges levels at the same price across venues, sorts bids descending and asks ascending, then trims to 200 levels per side. The result is written into Zustand alongside each venue's individual book and connection status. `quoteCalculator.ts` reads the aggregated book from the store and simulates a fill walk, computing how a given dollar amount would be filled across both venues.
+
+**State → UI**
+Both UI components subscribe to Zustand and re-render when their slice of state changes. The `OrderBook` component shows three views simultaneously: Polymarket's book, Kalshi's book, and the combined book, with connection status badges so users can see immediately if a venue has dropped. `QuoteEngine` shows the fill simulation results including per-venue share attribution and the routing table.
+
+---
+
 ## How to run
 
 ### 1. Install frontend dependencies
+
 ```bash
 npm install
 ```
@@ -57,17 +164,20 @@ Kalshi requires API key authentication, so a lightweight Node.js proxy handles a
 **Setup:**
 
 Create a `.env` file in `backend/`:
+
 ```env
 PORT=3001
 KALSHI_API_KEY=your_api_key_here
 ```
 
 Place your Kalshi RSA private key at:
+
 ```
 backend/kalshi_private_key.pem
 ```
 
 **Start the proxy:**
+
 ```bash
 cd backend
 npm install
@@ -79,6 +189,7 @@ The proxy listens on port 3001 and forwards Kalshi order book updates to the fro
 ### 3. Start the frontend
 
 From the project root:
+
 ```bash
 npm run dev
 ```
