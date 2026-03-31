@@ -2,8 +2,22 @@ import { create } from 'zustand';
 import { SimplifiedWebSocketService } from '@/services/SimplifiedWebSocketService';
 import kalshiWs from '@/services/kalshiWs';
 import { OrderBookAggregator } from '@/utils/orderBookAggregator';
-import type { OrderBook } from '@/types/market';
-import type { ConnectionStatus } from '@/constants';
+import {
+  POLYMARKET,
+  KALSHI,
+  COMBINED,
+  CONNECTED,
+  DISCONNECTED,
+  CONNECTING,
+  ERROR,
+  BIDS,
+  ASKS,
+  ORDERBOOK_UPDATE,
+  CONNECTION_STATUS,
+  KALSHI_TICKER_DEFAULT,
+} from '@/constants';
+import type { OrderBook, OrderBookLevel } from '@/types/market';
+import type { ConnectionStatus, OrderBookSide, Venue } from '@/constants';
 
 type RawKalshiPayload = {
   type?: string;
@@ -32,23 +46,28 @@ const initialOrderBook: OrderBook = {
   asks: [],
   lastUpdate: new Date(),
   venueStatus: {
-    polymarket: 'disconnected',
-    kalshi: 'disconnected',
+    polymarket: DISCONNECTED,
+    kalshi: DISCONNECTED,
   },
 };
 
 const MAX_ORDERBOOK_LEVELS = 200;
 
-const trimLevels = (levels: Array<{ price: number; size: number; venue: string }>, side: 'bids' | 'asks') => {
-  const sorted = [...levels].sort((a, b) => (side === 'bids' ? b.price - a.price : a.price - b.price));
+const trimLevels = (levels: OrderBookLevel[], side: OrderBookSide): OrderBookLevel[] => {
+  const sorted = [...levels].sort((a, b) =>
+    side === BIDS ? b.price - a.price : a.price - b.price,
+  );
   return sorted.slice(0, MAX_ORDERBOOK_LEVELS);
 };
 
-const prunePriceMap = (bookSide: Map<number, number>, side: 'bids' | 'asks') => {
+const prunePriceMap = (
+  bookSide: Map<number, number>,
+  side: OrderBookSide,
+) => {
   if (bookSide.size <= MAX_ORDERBOOK_LEVELS) return;
 
   const sortedEntries = Array.from(bookSide.entries()).sort((a, b) =>
-    side === 'bids' ? b[0] - a[0] : a[0] - b[0],
+    side === BIDS ? b[0] - a[0] : a[0] - b[0],
   );
 
   bookSide.clear();
@@ -58,14 +77,22 @@ const prunePriceMap = (bookSide: Map<number, number>, side: 'bids' | 'asks') => 
   });
 };
 
-const sanitizeLevels = (levels: Array<{ price: number; size: number; venue: string }>) =>
+const sanitizeLevels = (
+  levels: Array<{ price: number; size: number; venue: string }>,
+) =>
   levels
     .map((lvl) => ({
       price: Number(lvl.price),
       size: Number(lvl.size),
-      venue: lvl.venue as 'polymarket' | 'kalshi' | 'combined',
+      venue: lvl.venue as Venue | typeof COMBINED,
     }))
-    .filter((lvl) => Number.isFinite(lvl.price) && Number.isFinite(lvl.size) && lvl.price > 0 && lvl.size > 0);
+    .filter(
+      (lvl) =>
+        Number.isFinite(lvl.price) &&
+        Number.isFinite(lvl.size) &&
+        lvl.price > 0 &&
+        lvl.size > 0,
+    );
 export interface MarketStore {
   orderBook: OrderBook;
   polymarketOrderBook: OrderBook;
@@ -75,10 +102,13 @@ export interface MarketStore {
   isLoading: boolean;
   error: string | null;
   setConnectionStatus: (
-    venue: 'polymarket' | 'kalshi',
+    venue: typeof POLYMARKET | typeof KALSHI,
     status: ConnectionStatus,
   ) => void;
-  updateOrderBook: (venue: 'polymarket' | 'kalshi', book: OrderBook) => void;
+  updateOrderBook: (
+    venue: typeof POLYMARKET | typeof KALSHI,
+    book: OrderBook,
+  ) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   initialize: () => void;
@@ -89,7 +119,7 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
   orderBook: initialOrderBook,
   polymarketOrderBook: initialOrderBook,
   kalshiOrderBook: initialOrderBook,
-  connectionStatus: { polymarket: 'disconnected', kalshi: 'disconnected' },
+  connectionStatus: { polymarket: DISCONNECTED, kalshi: DISCONNECTED },
   lastVenueUpdate: { polymarket: null, kalshi: null },
   isLoading: true,
   error: null,
@@ -104,14 +134,14 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
 
     const prunedBook: OrderBook = {
       ...book,
-      bids: trimLevels(book.bids, 'bids'),
-      asks: trimLevels(book.asks, 'asks'),
+      bids: trimLevels(book.bids, BIDS),
+      asks: trimLevels(book.asks, ASKS),
     };
 
     // No-op for stagnant empty updates to avoid unnecessary render churn on long-running sessions.
     // Preserve explicit resets where multi-venue data disappears.
     const existingVenueBook =
-      venue === 'polymarket' ? get().polymarketOrderBook : get().kalshiOrderBook;
+      venue === POLYMARKET ? get().polymarketOrderBook : get().kalshiOrderBook;
 
     if (
       prunedBook.bids.length === 0 &&
@@ -133,11 +163,11 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
       },
     };
 
-    if (venue === 'polymarket') {
+    if (venue === POLYMARKET) {
       nextState.polymarketOrderBook = prunedBook;
     }
 
-    if (venue === 'kalshi') {
+    if (venue === KALSHI) {
       nextState.kalshiOrderBook = prunedBook;
     }
 
@@ -157,8 +187,8 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
     }
 
     store.setLoading(true);
-    store.setConnectionStatus('polymarket', 'connecting');
-    store.setConnectionStatus('kalshi', 'connecting');
+    store.setConnectionStatus(POLYMARKET, CONNECTING);
+    store.setConnectionStatus(KALSHI, CONNECTING);
 
     const kalshiOrderBookState = {
       yes: new Map<number, number>(),
@@ -167,50 +197,55 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
 
     wsService = new SimplifiedWebSocketService({
       url: 'wss://ws-subscriptions-clob.polymarket.com/ws/market',
-      venue: 'polymarket',
+      venue: POLYMARKET,
       assetIds: [
         '3039641309958397001906153616677074061284510636204155275446291716739429262374',
         '27828976648682466778776999076215423777766972981338264154049603024771135223200',
       ],
       onMessage: (data) => {
         if (data && typeof data === 'object') {
+          const message = data as { bids?: unknown; asks?: unknown };
           const book: OrderBook = {
-            bids: Array.isArray(data.bids)
+            bids: Array.isArray(message.bids)
               ? sanitizeLevels(
-                  data.bids.map((b: { price: number | string; size: number | string }) => ({
-                    price: Number(b.price),
-                    size: Number(b.size),
-                    venue: 'polymarket',
-                  })),
+                  (message.bids as Array<{ price: number | string; size: number | string }>).map(
+                    (b) => ({
+                      price: Number(b.price),
+                      size: Number(b.size),
+                      venue: POLYMARKET,
+                    }),
+                  ),
                 )
               : [],
-            asks: Array.isArray(data.asks)
+            asks: Array.isArray(message.asks)
               ? sanitizeLevels(
-                  data.asks.map((a: { price: number | string; size: number | string }) => ({
-                    price: Number(a.price),
-                    size: Number(a.size),
-                    venue: 'polymarket',
-                  })),
+                  (message.asks as Array<{ price: number | string; size: number | string }>).map(
+                    (a) => ({
+                      price: Number(a.price),
+                      size: Number(a.size),
+                      venue: POLYMARKET,
+                    }),
+                  ),
                 )
               : [],
             lastUpdate: new Date(),
             venueStatus: {
-              polymarket: 'connected',
+              polymarket: CONNECTED,
               kalshi: get().connectionStatus.kalshi,
             },
           };
 
-          get().updateOrderBook('polymarket', book);
+          get().updateOrderBook(POLYMARKET, book);
         }
       },
       onConnect: () => {
-        get().setConnectionStatus('polymarket', 'connected');
+        get().setConnectionStatus(POLYMARKET, CONNECTED);
       },
       onDisconnect: () => {
-        get().setConnectionStatus('polymarket', 'disconnected');
+        get().setConnectionStatus(POLYMARKET, DISCONNECTED);
       },
       onError: (error) => {
-        get().setConnectionStatus('polymarket', 'error');
+        get().setConnectionStatus(POLYMARKET, ERROR);
         get().setError(error);
       },
     });
@@ -223,25 +258,45 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
 
       const type = String(payload.type ?? '').toLowerCase();
       const msg = payload.msg;
+      const messageType =
+        type === 'orderbook_snapshot' || type === 'orderbook_delta'
+          ? ORDERBOOK_UPDATE
+          : CONNECTION_STATUS;
 
-      const yesSnapshot = msg?.yes_dollars_fp ?? payload.yes_dollars_fp ?? payload.yes ?? [];
-      const noSnapshot = msg?.no_dollars_fp ?? payload.no_dollars_fp ?? payload.no ?? [];
+      console.debug('Kalshi WS message', { type, messageType });
+
+      const yesSnapshot =
+        msg?.yes_dollars_fp ?? payload.yes_dollars_fp ?? payload.yes ?? [];
+      const noSnapshot =
+        msg?.no_dollars_fp ?? payload.no_dollars_fp ?? payload.no ?? [];
 
       const snapshotPairs = (items: Array<unknown>) =>
         items
-          .filter((entry) => Array.isArray(entry) && (entry as unknown[]).length >= 2)
-          .map((entry) => (entry as unknown[]) as [unknown, unknown]);
+          .filter(
+            (entry) => Array.isArray(entry) && (entry as unknown[]).length >= 2,
+          )
+          .map((entry) => entry as unknown[] as [unknown, unknown]);
 
-      const hasSnapshotData = snapshotPairs(yesSnapshot).length > 0 || snapshotPairs(noSnapshot).length > 0;
+      const hasSnapshotData =
+        snapshotPairs(yesSnapshot).length > 0 ||
+        snapshotPairs(noSnapshot).length > 0;
 
-      if (type === 'orderbook_snapshot' || (type === 'orderbook_delta' && hasSnapshotData)) {
+      if (
+        type === 'orderbook_snapshot' ||
+        (type === 'orderbook_delta' && hasSnapshotData)
+      ) {
         kalshiOrderBookState.yes.clear();
         kalshiOrderBookState.no.clear();
 
         snapshotPairs(yesSnapshot).forEach(([p, s]) => {
           const price = Number(p);
           const size = Number(s);
-          if (Number.isFinite(price) && price > 0 && Number.isFinite(size) && size > 0) {
+          if (
+            Number.isFinite(price) &&
+            price > 0 &&
+            Number.isFinite(size) &&
+            size > 0
+          ) {
             kalshiOrderBookState.yes.set(price, size);
           }
         });
@@ -249,22 +304,38 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
         snapshotPairs(noSnapshot).forEach(([p, s]) => {
           const price = Number(p);
           const size = Number(s);
-          if (Number.isFinite(price) && price > 0 && Number.isFinite(size) && size > 0) {
+          if (
+            Number.isFinite(price) &&
+            price > 0 &&
+            Number.isFinite(size) &&
+            size > 0
+          ) {
             kalshiOrderBookState.no.set(price, size);
           }
         });
 
-        prunePriceMap(kalshiOrderBookState.yes, 'bids');
-        prunePriceMap(kalshiOrderBookState.no, 'asks');
+        prunePriceMap(kalshiOrderBookState.yes, BIDS);
+        prunePriceMap(kalshiOrderBookState.no, ASKS);
       }
 
       if (type === 'orderbook_delta') {
         const deltaSide = String(msg?.side ?? payload.side ?? '').toLowerCase();
-        const deltaPrice = Number(msg?.price_dollars ?? payload.price_dollars ?? NaN);
+        const deltaPrice = Number(
+          msg?.price_dollars ?? payload.price_dollars ?? NaN,
+        );
         const deltaSize = Number(msg?.delta_fp ?? payload.delta_fp ?? NaN);
 
-        if ((deltaSide === 'yes' || deltaSide === 'no') && Number.isFinite(deltaPrice) && deltaPrice > 0 && Number.isFinite(deltaSize) && deltaSize !== 0) {
-          const bookSide = deltaSide === 'yes' ? kalshiOrderBookState.yes : kalshiOrderBookState.no;
+        if (
+          (deltaSide === 'yes' || deltaSide === 'no') &&
+          Number.isFinite(deltaPrice) &&
+          deltaPrice > 0 &&
+          Number.isFinite(deltaSize) &&
+          deltaSize !== 0
+        ) {
+          const bookSide =
+            deltaSide === 'yes'
+              ? kalshiOrderBookState.yes
+              : kalshiOrderBookState.no;
           const current = bookSide.get(deltaPrice) || 0;
           const next = current + deltaSize;
 
@@ -274,8 +345,8 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
             bookSide.set(deltaPrice, next);
           }
 
-          prunePriceMap(kalshiOrderBookState.yes, 'bids');
-          prunePriceMap(kalshiOrderBookState.no, 'asks');
+          prunePriceMap(kalshiOrderBookState.yes, BIDS);
+          prunePriceMap(kalshiOrderBookState.no, ASKS);
         }
       }
 
@@ -284,7 +355,7 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
         Array.from(kalshiOrderBookState.yes.entries()).map(([price, size]) => ({
           price,
           size,
-          venue: 'kalshi' as const,
+          venue: KALSHI,
         })),
       ).sort((a, b) => b.price - a.price);
 
@@ -292,7 +363,7 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
         Array.from(kalshiOrderBookState.no.entries()).map(([price, size]) => ({
           price,
           size,
-          venue: 'kalshi' as const,
+          venue: KALSHI,
         })),
       ).sort((a, b) => a.price - b.price);
 
@@ -302,17 +373,17 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
         lastUpdate: new Date(),
         venueStatus: {
           polymarket: get().connectionStatus.polymarket,
-          kalshi: 'connected',
+          kalshi: CONNECTED,
         },
       };
 
-      get().setConnectionStatus('kalshi', 'connected');
-      get().updateOrderBook('kalshi', kalshiBook);
+      get().setConnectionStatus(KALSHI, CONNECTED);
+      get().updateOrderBook(KALSHI, kalshiBook);
     };
 
     kalshiWsOff = kalshiWs.onMessage(handleKalshiMessage);
     kalshiWs.connect();
-    kalshiWs.subscribe(['KXPRESPERSON-28-JVAN']);
+    kalshiWs.subscribe([KALSHI_TICKER_DEFAULT]);
 
     store.setLoading(false);
   },
@@ -336,7 +407,7 @@ export const useMarketStore = create<MarketStore>((set, get) => ({
       orderBook: initialOrderBook,
       polymarketOrderBook: initialOrderBook,
       kalshiOrderBook: initialOrderBook,
-      connectionStatus: { polymarket: 'disconnected', kalshi: 'disconnected' },
+      connectionStatus: { polymarket: DISCONNECTED, kalshi: DISCONNECTED },
       lastVenueUpdate: { polymarket: null, kalshi: null },
       isLoading: false,
       error: null,

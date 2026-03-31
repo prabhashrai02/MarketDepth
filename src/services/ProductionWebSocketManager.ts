@@ -48,7 +48,12 @@ export interface ConnectionConfig {
 }
 
 export interface ConnectionState {
-  status: 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting';
+  status:
+    | 'disconnected'
+    | 'connecting'
+    | 'connected'
+    | 'error'
+    | 'reconnecting';
   lastMessageTime: number;
   lastSequence: number;
   reconnectAttempts: number;
@@ -78,7 +83,10 @@ export class ProductionWebSocketManager extends EventEmitter {
   }
 
   connect(): void {
-    if (this.state.status === 'connecting' || this.state.status === 'connected') {
+    if (
+      this.state.status === 'connecting' ||
+      this.state.status === 'connected'
+    ) {
       return;
     }
 
@@ -122,7 +130,7 @@ export class ProductionWebSocketManager extends EventEmitter {
   private handleMessage(rawData: string): void {
     try {
       const message = JSON.parse(rawData) as WebSocketMessage;
-      
+
       // Validate message structure
       if (!this.validateMessage(message)) {
         console.warn(`Invalid message from ${this.config.venue}:`, message);
@@ -131,24 +139,28 @@ export class ProductionWebSocketManager extends EventEmitter {
 
       // Handle out-of-order messages
       if (message.sequence < this.state.lastSequence) {
-        console.warn(`Out-of-order message detected: ${message.sequence} < ${this.state.lastSequence}`);
+        console.warn(
+          `Out-of-order message detected: ${message.sequence} < ${this.state.lastSequence}`,
+        );
         // Queue for later processing or request resync
         this.requestResync();
         return;
       }
 
       this.state.lastSequence = message.sequence;
-      
+
       // Throttle processing to prevent UI thrashing
       this.messageQueue.push(message);
       if (this.messageQueue.length > this.maxQueueSize) {
         this.messageQueue.shift(); // Drop oldest messages
       }
-      
+
       this.processMessageQueue();
-      
     } catch (error) {
-      console.error(`Failed to parse message from ${this.config.venue}:`, error);
+      console.error(
+        `Failed to parse message from ${this.config.venue}:`,
+        error,
+      );
     }
   }
 
@@ -168,11 +180,11 @@ export class ProductionWebSocketManager extends EventEmitter {
     if (this.isProcessing || this.messageQueue.length === 0) return;
 
     this.isProcessing = true;
-    
+
     // Process messages in batch to reduce UI updates
     const messages = this.messageQueue.splice(0, 10);
-    
-    messages.forEach(message => {
+
+    messages.forEach((message) => {
       this.emit('message', message);
     });
 
@@ -197,9 +209,9 @@ export class ProductionWebSocketManager extends EventEmitter {
   private startHeartbeat(): void {
     this.heartbeatTimer = setInterval(() => {
       if (this.state.status !== 'connected') return;
-      
+
       const timeSinceLastMessage = Date.now() - this.state.lastMessageTime;
-      
+
       if (timeSinceLastMessage > this.config.messageTimeout) {
         console.warn(`Heartbeat timeout for ${this.config.venue}`);
         this.reconnect();
@@ -215,9 +227,11 @@ export class ProductionWebSocketManager extends EventEmitter {
 
   private handleDisconnection(event: CloseEvent): void {
     this.cleanup();
-    
+
     if (!event.wasClean) {
-      console.warn(`WebSocket disconnected unexpectedly: ${event.code} ${event.reason}`);
+      console.warn(
+        `WebSocket disconnected unexpectedly: ${event.code} ${event.reason}`,
+      );
       this.scheduleReconnect();
     } else {
       this.state.status = 'disconnected';
@@ -242,14 +256,17 @@ export class ProductionWebSocketManager extends EventEmitter {
 
     this.state.status = 'reconnecting';
     this.state.reconnectAttempts++;
-    
+
     const delay = Math.min(
-      this.config.reconnectBaseDelay * Math.pow(2, this.state.reconnectAttempts - 1),
-      this.config.maxReconnectDelay
+      this.config.reconnectBaseDelay *
+        Math.pow(2, this.state.reconnectAttempts - 1),
+      this.config.maxReconnectDelay,
     );
 
-    console.log(`Reconnecting to ${this.config.venue} in ${delay}ms (attempt ${this.state.reconnectAttempts})`);
-    
+    console.log(
+      `Reconnecting to ${this.config.venue} in ${delay}ms (attempt ${this.state.reconnectAttempts})`,
+    );
+
     this.reconnectTimer = setTimeout(() => {
       this.connect();
     }, delay);
@@ -258,7 +275,9 @@ export class ProductionWebSocketManager extends EventEmitter {
   private requestResync(): void {
     // Request full snapshot to recover from out-of-order messages
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'resync', sequence: this.state.lastSequence }));
+      this.ws.send(
+        JSON.stringify({ type: 'resync', sequence: this.state.lastSequence }),
+      );
     }
   }
 
@@ -280,12 +299,12 @@ export class ProductionWebSocketManager extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
-    
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    
+
     this.messageQueue = [];
     this.isProcessing = false;
   }

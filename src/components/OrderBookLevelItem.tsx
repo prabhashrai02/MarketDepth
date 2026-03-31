@@ -27,15 +27,15 @@ export const OrderBookLevelItem: React.FC<OrderBookLevelItemProps> = ({
   interactive = true,
 }) => {
   const styles = ORDER_BOOK_STYLES[type];
-  
+
   const sizeClasses = {
     sm: 'py-1 px-2 text-xs',
     md: 'py-2 px-3 text-sm',
     lg: 'py-3 px-4 text-base',
   };
 
-  const interactiveClasses = interactive 
-    ? 'hover:bg-slate-800 transition-all duration-200 cursor-pointer' 
+  const interactiveClasses = interactive
+    ? 'hover:bg-slate-800 transition-all duration-200 cursor-pointer'
     : '';
 
   return (
@@ -47,7 +47,9 @@ export const OrderBookLevelItem: React.FC<OrderBookLevelItemProps> = ({
         style={{ width: `${percentage}%` }}
       />
       <div className="flex items-center space-x-3 z-10">
-        <span className={`font-mono font-medium ${styles.textColor} transition-colors`}>
+        <span
+          className={`font-mono font-medium ${styles.textColor} transition-colors`}
+        >
           {formatPrice(level.price)}
         </span>
         {showVenue && <VenueIndicator venue={level.venue} />}

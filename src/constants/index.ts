@@ -24,9 +24,20 @@ export const CONNECTION_STATUS = 'connection_status' as const;
 // Venue arrays
 export const VENUES = [POLYMARKET, KALSHI] as const;
 
+// Default Kalshi ticker for app sample data
+export const KALSHI_TICKER_DEFAULT = 'KXPRESPERSON-28-JVAN' as const;
+export type KalshiTicker = typeof KALSHI_TICKER_DEFAULT;
+
 // Export types for constants
 export type Venue = typeof POLYMARKET | typeof KALSHI;
-export type ConnectionStatus = typeof CONNECTED | typeof DISCONNECTED | typeof ERROR | typeof CONNECTING;
+export type ConnectionStatus =
+  | typeof CONNECTED
+  | typeof DISCONNECTED
+  | typeof ERROR
+  | typeof CONNECTING;
 export type Side = typeof BUY | typeof SELL;
-export type MessageType = typeof ORDERBOOK_UPDATE | typeof CONNECTION_STATUS | typeof ERROR;
+export type MessageType =
+  | typeof ORDERBOOK_UPDATE
+  | typeof CONNECTION_STATUS
+  | typeof ERROR;
 export type OrderBookSide = typeof BIDS | typeof ASKS;

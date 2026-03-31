@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import type { ConnectionStatus } from '../../../constants';
+import { CONNECTED, CONNECTING, DISCONNECTED, ERROR } from '@/constants';
+import type { ConnectionStatus } from '@/constants';
 
 interface ConnectionStatusBannerProps {
   polymarketStatus: ConnectionStatus;
@@ -23,11 +24,10 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const hasConnectionIssues = 
-    polymarketStatus === 'error' || kalshiStatus === 'error';
+  const hasConnectionIssues =
+    polymarketStatus === ERROR || kalshiStatus === ERROR;
   const isDisconnected = 
-    polymarketStatus === 'disconnected' && kalshiStatus === 'disconnected';
-
+    polymarketStatus === DISCONNECTED && kalshiStatus === DISCONNECTED;
   const isStale = (lastUpdate?: Date | null) => {
     if (!lastUpdate) return false;
     return currentTime - lastUpdate.getTime() > STALE_THRESHOLD_MS;
@@ -38,13 +38,13 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
 
   const getConnectionStatusColor = (status: ConnectionStatus) => {
     switch (status) {
-      case 'connected':
+      case CONNECTED:
         return 'text-green-600';
-      case 'connecting':
+      case CONNECTING:
         return 'text-yellow-600';
-      case 'disconnected':
+      case DISCONNECTED:
         return 'text-red-600';
-      case 'error':
+      case ERROR:
         return 'text-red-600';
       default:
         return 'text-slate-300';
@@ -53,13 +53,13 @@ export const ConnectionStatusBanner: React.FC<ConnectionStatusBannerProps> = ({
 
   const getConnectionStatusText = (status: ConnectionStatus) => {
     switch (status) {
-      case 'connected':
+      case CONNECTED:
         return '●';
-      case 'connecting':
+      case CONNECTING:
         return '◐';
-      case 'disconnected':
+      case DISCONNECTED:
         return '○';
-      case 'error':
+      case ERROR:
         return '●';
       default:
         return '○';

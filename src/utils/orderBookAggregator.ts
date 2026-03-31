@@ -1,6 +1,15 @@
-import { POLYMARKET, KALSHI, BIDS, ASKS, DISCONNECTED, type OrderBookSide, COMBINED, type ConnectionStatus } from "@/constants";
-import type { OrderBook, OrderBookLevel } from "@/types/market";
-
+import {
+  POLYMARKET,
+  KALSHI,
+  BIDS,
+  ASKS,
+  CONNECTED,
+  DISCONNECTED,
+  type OrderBookSide,
+  COMBINED,
+  type ConnectionStatus,
+} from '@/constants';
+import type { OrderBook, OrderBookLevel } from '@/types/market';
 
 export class OrderBookAggregator {
   private polymarketBook: OrderBook | null = null;
@@ -14,7 +23,12 @@ export class OrderBookAggregator {
 
   private normalizeBook(book?: OrderBook | null): OrderBook {
     if (!book) {
-      return { bids: [], asks: [], lastUpdate: new Date(0), venueStatus: { polymarket: DISCONNECTED, kalshi: DISCONNECTED }};
+      return {
+        bids: [],
+        asks: [],
+        lastUpdate: new Date(0),
+        venueStatus: { polymarket: DISCONNECTED, kalshi: DISCONNECTED },
+      };
     }
 
     return {
@@ -25,7 +39,10 @@ export class OrderBookAggregator {
     };
   }
 
-  updateOrderBook(venue: typeof POLYMARKET | typeof KALSHI, orderBook: OrderBook): void {
+  updateOrderBook(
+    venue: typeof POLYMARKET | typeof KALSHI,
+    orderBook: OrderBook,
+  ): void {
     if (venue === POLYMARKET) {
       this.polymarketBook = orderBook;
     } else {
@@ -37,15 +54,22 @@ export class OrderBookAggregator {
     const polymarketBook = this.normalizeBook(this.polymarketBook);
     const kalshiBook = this.normalizeBook(this.kalshiBook);
 
-    const isPolyConnected = polymarketBook.venueStatus.polymarket === 'connected';
-    const isKalshiConnected = kalshiBook.venueStatus.kalshi === 'connected';
+    const isPolyConnected =
+      polymarketBook.venueStatus.polymarket === CONNECTED;
+    const isKalshiConnected = kalshiBook.venueStatus.kalshi === CONNECTED;
 
     const polymarketBids = isPolyConnected ? polymarketBook.bids : [];
     const polymarketAsks = isPolyConnected ? polymarketBook.asks : [];
     const kalshiBids = isKalshiConnected ? kalshiBook.bids : [];
     const kalshiAsks = isKalshiConnected ? kalshiBook.asks : [];
-    const combinedBids = this.combineAndSortLevels([...polymarketBids, ...kalshiBids], BIDS);
-    const combinedAsks = this.combineAndSortLevels([...polymarketAsks, ...kalshiAsks], ASKS);
+    const combinedBids = this.combineAndSortLevels(
+      [...polymarketBids, ...kalshiBids],
+      BIDS,
+    );
+    const combinedAsks = this.combineAndSortLevels(
+      [...polymarketAsks, ...kalshiAsks],
+      ASKS,
+    );
 
     const bestBid = combinedBids[0]?.price ?? 0;
     const bestAsk = combinedAsks[0]?.price ?? 0;
@@ -63,7 +87,10 @@ export class OrderBookAggregator {
     };
   }
 
-  private combineAndSortLevels(levels: OrderBookLevel[], side: OrderBookSide): OrderBookLevel[] {
+  private combineAndSortLevels(
+    levels: OrderBookLevel[],
+    side: OrderBookSide,
+  ): OrderBookLevel[] {
     const grouped = new Map<number, OrderBookLevel>();
 
     levels.forEach((level) => {
@@ -71,7 +98,12 @@ export class OrderBookAggregator {
       const size = Number(level.size);
 
       // Skip invalid or non-positive values; aggregation should never produce negatives.
-      if (!Number.isFinite(price) || !Number.isFinite(size) || price <= 0 || size <= 0) {
+      if (
+        !Number.isFinite(price) ||
+        !Number.isFinite(size) ||
+        price <= 0 ||
+        size <= 0
+      ) {
         return;
       }
 
@@ -93,7 +125,7 @@ export class OrderBookAggregator {
     });
 
     const sorted = Array.from(grouped.values()).sort((a, b) =>
-      side === BIDS ? b.price - a.price : a.price - b.price
+      side === BIDS ? b.price - a.price : a.price - b.price,
     );
 
     // Keep the book bounded for long-running sessions and to avoid memory blow-up
@@ -103,7 +135,7 @@ export class OrderBookAggregator {
   getVenueStatus(): { polymarket: ConnectionStatus; kalshi: ConnectionStatus } {
     return {
       polymarket: this.polymarketBook?.venueStatus.polymarket || DISCONNECTED,
-      kalshi: this.kalshiBook?.venueStatus.kalshi || DISCONNECTED
+      kalshi: this.kalshiBook?.venueStatus.kalshi || DISCONNECTED,
     };
   }
 }

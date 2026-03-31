@@ -1,3 +1,11 @@
+import {
+  CONNECTED,
+  DISCONNECTED,
+  ERROR,
+  CONNECTING,
+  POLYMARKET,
+  KALSHI,
+} from '@/constants/index';
 import type { ConnectionStatus } from '@/constants/index';
 
 export interface StatusConfig {
@@ -14,7 +22,7 @@ export interface StatusConfig {
 }
 
 export const STATUS_CONFIG: Record<ConnectionStatus, StatusConfig> = {
-  connected: {
+  [CONNECTED]: {
     icon: '✅',
     text: 'Connected',
     colorClasses: {
@@ -25,7 +33,7 @@ export const STATUS_CONFIG: Record<ConnectionStatus, StatusConfig> = {
       badgeText: 'text-green-800',
     },
   },
-  connecting: {
+  [CONNECTING]: {
     icon: '🔄',
     text: 'Connecting...',
     colorClasses: {
@@ -37,7 +45,7 @@ export const STATUS_CONFIG: Record<ConnectionStatus, StatusConfig> = {
     },
     spin: true,
   },
-  disconnected: {
+  [DISCONNECTED]: {
     icon: '❌',
     text: 'Disconnected',
     colorClasses: {
@@ -48,7 +56,7 @@ export const STATUS_CONFIG: Record<ConnectionStatus, StatusConfig> = {
       badgeText: 'text-red-800',
     },
   },
-  error: {
+  [ERROR]: {
     icon: '⚠️',
     text: 'Connection Error',
     colorClasses: {
@@ -69,32 +77,34 @@ export interface ServiceConfig {
 }
 
 export const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
-  polymarket: {
-    id: 'polymarket',
+  [POLYMARKET]: {
+    id: POLYMARKET,
     name: 'Polymarket',
     description: 'Prediction markets',
     shortName: 'PM',
   },
-  kalshi: {
-    id: 'kalshi',
+  [KALSHI]: {
+    id: KALSHI,
     name: 'Kalshi',
     description: 'Event contracts',
     shortName: 'KL',
   },
 };
 
-export const getOverallStatus = (statuses: Record<string, ConnectionStatus>): string => {
+export const getOverallStatus = (
+  statuses: Record<string, ConnectionStatus>,
+): string => {
   const values = Object.values(statuses);
 
-  if (values.every(s => s === 'connected')) {
+  if (values.every((s) => s === CONNECTED)) {
     return 'All systems operational';
   }
 
-  if (values.some(s => s === 'error')) {
+  if (values.some((s) => s === ERROR)) {
     return 'Connection issues detected';
   }
 
-  if (values.some(s => s === 'connecting')) {
+  if (values.some((s) => s === CONNECTING)) {
     return 'Establishing connections...';
   }
 

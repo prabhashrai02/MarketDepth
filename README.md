@@ -7,6 +7,7 @@ A simple front-end app combining liquidity from Polymarket and Kalshi in a singl
 ## 🚀 What this app does
 
 ### Market view
+
 - Displays a single prediction market with two outcomes (yes/no style order book).
 - Shows per-venue and combined order books in real time:
   - Polymarket
@@ -14,6 +15,7 @@ A simple front-end app combining liquidity from Polymarket and Kalshi in a singl
 - Visual cues for liquidity distribution and price differences.
 
 ### Live aggregation
+
 - Listens for updates from both venues via WebSocket.
 - Reconciles format differences between APIs into uniform `OrderBook` shape.
 - Merges aggregated depth by price, sorting: bids desc, asks asc.
@@ -21,12 +23,14 @@ A simple front-end app combining liquidity from Polymarket and Kalshi in a singl
 - Shows connection status (connected/disconnected/error/connecting) for each venue.
 
 ### Quote experience
+
 - User can enter USD amount and select buy/sell side.
 - App calculates fill expectation across combined book + per venue.
 - Returns total shares, cost, average price, slippage, and unfilled amount.
 - Shows per-venue breakdown and routing table.
 
 ### Long-running behavior
+
 - Safe for extended runtimes:
   - bounded book state
   - stale/invalid data filtering
@@ -44,6 +48,7 @@ npm install
 ```
 
 ### 2. Backend proxy (required)
+
 Run the required backend proxy that feeds Kalshi updates.
 
 1. Create `.env` in project root or `backend/`:
@@ -76,7 +81,6 @@ npm run dev
 ```
 
 Open http://localhost:3000
-
 
 > Note: automated tests are not included in this repository currently.
 

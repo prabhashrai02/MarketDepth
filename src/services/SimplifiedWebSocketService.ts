@@ -37,7 +37,6 @@ export class SimplifiedWebSocketService {
         this.startHeartbeat();
       };
 
-
       this.ws.onmessage = (event) => {
         const raw = event.data;
 

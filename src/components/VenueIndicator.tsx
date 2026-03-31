@@ -1,13 +1,17 @@
 import React from 'react';
 import { VENUE_CONFIG } from '@/constants/venues';
 import type { Venue } from '@/constants';
+import { COMBINED } from '@/constants';
 
 interface VenueIndicatorProps {
-  venue: Venue | 'combined';
+  venue: Venue | typeof COMBINED;
   className?: string;
 }
 
-export const VenueIndicator: React.FC<VenueIndicatorProps> = ({ venue, className = '' }) => {
+export const VenueIndicator: React.FC<VenueIndicatorProps> = ({
+  venue,
+  className = '',
+}) => {
   const config = VENUE_CONFIG[venue];
 
   if (!config) return null;

@@ -40,10 +40,7 @@ const normalizeMarkets = (markets: MarketInput): string[] => {
 };
 
 export default function useKalshiMarket(markets: MarketInput) {
-  const requestedMarkets = useMemo(
-    () => normalizeMarkets(markets),
-    [markets]
-  );
+  const requestedMarkets = useMemo(() => normalizeMarkets(markets), [markets]);
 
   const [tickerData, setTickerData] = useState<TickerMap>({});
   const [status, setStatus] = useState<Status>('idle');
@@ -62,8 +59,7 @@ export default function useKalshiMarket(markets: MarketInput) {
 
       const msg = message as KalshiIncomingMessage;
 
-      const marketTicker =
-        msg.market_ticker || msg.marketTicker || msg.market;
+      const marketTicker = msg.market_ticker || msg.marketTicker || msg.market;
 
       if (!marketTicker || !requestedMarkets.includes(marketTicker)) {
         return;

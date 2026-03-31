@@ -2,12 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { useMarketStore } from '@/store/useMarketStore';
 import { calculateQuote } from '@/utils/quoteCalculator';
 import { formatPrice, formatSize, formatPercentage } from '@/utils/formatters';
+import { BUY, SELL, VENUES } from '@/constants';
 import type { QuoteSide } from '@/types/market';
 import { SelectDropdown } from './SelectDropdown';
 
 export const QuoteEngine: React.FC = () => {
   const [amount, setAmount] = useState<number>(100);
-  const [side, setSide] = useState<QuoteSide>('buy');
+  const [side, setSide] = useState<QuoteSide>(BUY);
   const [outcome, setOutcome] = useState<'Yes' | 'No'>('Yes');
 
   const orderBook = useMarketStore((state) => state.orderBook);
@@ -21,11 +22,11 @@ export const QuoteEngine: React.FC = () => {
       return null;
     }
 
-    const combinedLevels = side === 'buy' ? orderBook.asks : orderBook.bids;
+    const combinedLevels = side === BUY ? orderBook.asks : orderBook.bids;
     const polLevels =
-      side === 'buy' ? polymarketOrderBook.asks : polymarketOrderBook.bids;
+      side === BUY ? polymarketOrderBook.asks : polymarketOrderBook.bids;
     const kalLevels =
-      side === 'buy' ? kalshiOrderBook.asks : kalshiOrderBook.bids;
+      side === BUY ? kalshiOrderBook.asks : kalshiOrderBook.bids;
 
     return calculateQuote(amount, side, polLevels, kalLevels, combinedLevels);
   }, [amount, side, orderBook, polymarketOrderBook, kalshiOrderBook]);
@@ -55,8 +56,8 @@ export const QuoteEngine: React.FC = () => {
           label="Side"
           value={side}
           options={[
-            { value: 'buy', label: 'Buy' },
-            { value: 'sell', label: 'Sell' },
+            { value: BUY, label: 'Buy' },
+            { value: SELL, label: 'Sell' },
           ]}
           onChange={(nextValue) => setSide(nextValue as QuoteSide)}
         />
@@ -112,7 +113,7 @@ export const QuoteEngine: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(['polymarket', 'kalshi'] as const).map((venue) => {
+            {VENUES.map((venue) => {
               const venueQuote = quote.venueBreakdown[venue];
               return (
                 <div
@@ -134,7 +135,7 @@ export const QuoteEngine: React.FC = () => {
                   <div className="text-sm text-slate-300">
                     Avg: {formatPrice(venueQuote.avgPrice)}
                   </div>
-                  <div className="text-sm text-rose-300">
+                  <div className="text-sm text-rose-300 break-all">
                     Unfilled USD: {formatPrice(venueQuote.unfilledAmount)}
                   </div>
                 </div>
@@ -152,7 +153,7 @@ export const QuoteEngine: React.FC = () => {
               </small>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm mt-2 border-collapse min-w-[360px]">
+                <table className="w-full text-sm mt-2 border-collapse min-w-90">
                   <thead>
                     <tr className="border-b border-[#2a3b5e] text-slate-200">
                       <th className="py-2 text-left text-sm">Venue</th>

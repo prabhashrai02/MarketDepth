@@ -33,10 +33,12 @@ export const ANIMATION_CLASSES = {
 } as const;
 
 export const LAYOUT_CLASSES = {
-  container: 'bg-slate-900/80 rounded-lg shadow-lg p-4 hover-lift transition-all',
+  container:
+    'bg-slate-900/80 rounded-lg shadow-lg p-4 hover-lift transition-all',
   grid: 'grid grid-cols-2 gap-4',
   section: 'space-y-0 border border-slate-700 rounded-md overflow-hidden',
-  levelItem: 'relative flex items-center justify-between border-b border-slate-700 last:border-b-0',
+  levelItem:
+    'relative flex items-center justify-between border-b border-slate-700 last:border-b-0',
 } as const;
 
 export const TEXT_CLASSES = {

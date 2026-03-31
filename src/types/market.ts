@@ -1,10 +1,12 @@
+import type { Venue, Side } from '@/constants';
+
 export interface OrderBookLevel {
   price: number;
   size: number;
-  venue: 'polymarket' | 'kalshi' | 'combined';
+  venue: Venue | 'combined';
 }
 
-export type QuoteSide = 'buy' | 'sell';
+export type QuoteSide = Side;
 
 export interface VenueQuoteResult {
   available: boolean;
@@ -25,7 +27,12 @@ export interface QuoteResult {
     polymarket: VenueQuoteResult;
     kalshi: VenueQuoteResult;
   };
-  routing: Array<{ venue: 'polymarket' | 'kalshi'; price: number; size: number; cost: number }>;
+  routing: Array<{
+    venue: 'polymarket' | 'kalshi';
+    price: number;
+    size: number;
+    cost: number;
+  }>;
 }
 
 export interface OrderBook {
@@ -41,5 +48,10 @@ export interface OrderBook {
 
 export type VenueUpdate = {
   timestamp: Date;
-  status: 'connected' | 'disconnecting' | 'disconnected' | 'error' | 'connecting';
+  status:
+    | 'connected'
+    | 'disconnecting'
+    | 'disconnected'
+    | 'error'
+    | 'connecting';
 };

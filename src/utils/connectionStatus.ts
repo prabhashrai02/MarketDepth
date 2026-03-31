@@ -1,39 +1,53 @@
+import { CONNECTED, DISCONNECTED, ERROR, CONNECTING } from '@/constants';
 import { CONNECTION_STATUS_STYLES } from '@/constants/venues';
+import type { ConnectionStatus } from '@/constants';
 
 export interface ConnectionStatusMap {
-  polymarket: 'connected' | 'disconnected' | 'error' | 'connecting';
-  kalshi: 'connected' | 'disconnected' | 'error' | 'connecting';
+  polymarket: ConnectionStatus;
+  kalshi: ConnectionStatus;
 }
 
-export const getConnectionStatusStyle = (status: string) => {
-  return CONNECTION_STATUS_STYLES[status as keyof typeof CONNECTION_STATUS_STYLES] ||
-    CONNECTION_STATUS_STYLES.default;
+export const getConnectionStatusStyle = (status: ConnectionStatus) => {
+  return (
+    CONNECTION_STATUS_STYLES[status as keyof typeof CONNECTION_STATUS_STYLES] ||
+    CONNECTION_STATUS_STYLES.default
+  );
 };
 
-export const getConnectionStatusColor = (status: string): string => {
+export const getConnectionStatusColor = (status: ConnectionStatus): string => {
   return getConnectionStatusStyle(status).color;
 };
 
-export const getConnectionStatusSymbol = (status: string): string => {
+export const getConnectionStatusSymbol = (status: ConnectionStatus): string => {
   return getConnectionStatusStyle(status).symbol;
 };
 
-export const getConnectionStatusText = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    connected: 'Connected',
-    disconnected: 'Disconnected',
-    error: 'Error',
-    connecting: 'Connecting...',
+export const getConnectionStatusText = (status: ConnectionStatus): string => {
+  const statusMap: Record<ConnectionStatus, string> = {
+    [CONNECTED]: 'Connected',
+    [DISCONNECTED]: 'Disconnected',
+    [ERROR]: 'Error',
+    [CONNECTING]: 'Connecting...',
   };
   return statusMap[status] || status;
 };
 
-export const hasConnectionIssues = (connectionStatus: ConnectionStatusMap): boolean => {
-  return connectionStatus.polymarket === 'error' || connectionStatus.kalshi === 'error';
+export const hasConnectionIssues = (
+  connectionStatus: ConnectionStatusMap,
+): boolean => {
+  return (
+    connectionStatus.polymarket === ERROR ||
+    connectionStatus.kalshi === ERROR
+  );
 };
 
-export const isDisconnected = (connectionStatus: ConnectionStatusMap): boolean => {
-  return connectionStatus.polymarket === 'disconnected' || connectionStatus.kalshi === 'disconnected';
+export const isDisconnected = (
+  connectionStatus: ConnectionStatusMap,
+): boolean => {
+  return (
+    connectionStatus.polymarket === DISCONNECTED ||
+    connectionStatus.kalshi === DISCONNECTED
+  );
 };
 
 export const getConnectionSummary = (connectionStatus: ConnectionStatusMap) => {
