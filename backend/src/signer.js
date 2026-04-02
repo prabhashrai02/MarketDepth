@@ -1,8 +1,6 @@
 const crypto = require('crypto');
-const fs = require('fs');
 
-const privateKey = fs
-  .readFileSync('./kalshi_private_key.pem', 'utf8')
+const privateKey = process.env.KALSHI_PRIVATE_KEY.replace(/\\n/g, '\n')
   .replace(/\r/g, '')
   .trim();
 

@@ -36,7 +36,7 @@ interface TickerMessage extends BaseMessage {
 type KalshiMessage = OrderbookDeltaMessage | TickerMessage | BaseMessage;
 
 class KalshiWebSocketService {
-  private url = 'ws://localhost:3001';
+  private url = 'wss://marketdepth.onrender.com';
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;

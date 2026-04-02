@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 3001;
 
 // ✅ CORRECT endpoint
 const KALSHI_WS_URL = 'wss://api.elections.kalshi.com/trade-api/ws/v2';
-// const KALSHI_WS_URL = "wss://demo-api.kalshi.co/trade-api/ws/v2";
 
 const server = http.createServer();
 const wss = new WebSocket.Server({ server });
