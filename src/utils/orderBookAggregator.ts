@@ -16,6 +16,11 @@ export class OrderBookAggregator {
   private kalshiBook: OrderBook | null = null;
   private static readonly MAX_LEVELS = 200;
 
+  // Normalize price to avoid float precision issues
+  private normalizePrice(price: number): number {
+    return Number(price.toFixed(6)); // adjust precision if needed
+  }
+
   reset(): void {
     this.polymarketBook = null;
     this.kalshiBook = null;
@@ -27,14 +32,17 @@ export class OrderBookAggregator {
         bids: [],
         asks: [],
         lastUpdate: new Date(0),
-        venueStatus: { polymarket: DISCONNECTED, kalshi: DISCONNECTED },
+        venueStatus: {
+          polymarket: DISCONNECTED,
+          kalshi: DISCONNECTED,
+        },
       };
     }
 
     return {
       bids: this.combineAndSortLevels(book.bids, BIDS),
       asks: this.combineAndSortLevels(book.asks, ASKS),
-      lastUpdate: book.lastUpdate || new Date(),
+      lastUpdate: book.lastUpdate || new Date(0),
       venueStatus: book.venueStatus,
     };
   }
@@ -43,6 +51,7 @@ export class OrderBookAggregator {
     venue: typeof POLYMARKET | typeof KALSHI,
     orderBook: OrderBook,
   ): void {
+    // Store reference safely (no mutation happens later)
     if (venue === POLYMARKET) {
       this.polymarketBook = orderBook;
     } else {
@@ -56,33 +65,50 @@ export class OrderBookAggregator {
 
     const isPolyConnected =
       polymarketBook.venueStatus.polymarket === CONNECTED;
-    const isKalshiConnected = kalshiBook.venueStatus.kalshi === CONNECTED;
+    const isKalshiConnected =
+      kalshiBook.venueStatus.kalshi === CONNECTED;
 
     const polymarketBids = isPolyConnected ? polymarketBook.bids : [];
     const polymarketAsks = isPolyConnected ? polymarketBook.asks : [];
     const kalshiBids = isKalshiConnected ? kalshiBook.bids : [];
     const kalshiAsks = isKalshiConnected ? kalshiBook.asks : [];
+
     const combinedBids = this.combineAndSortLevels(
       [...polymarketBids, ...kalshiBids],
       BIDS,
     );
+
     const combinedAsks = this.combineAndSortLevels(
       [...polymarketAsks, ...kalshiAsks],
       ASKS,
     );
 
-    const bestBid = combinedBids[0]?.price ?? 0;
-    const bestAsk = combinedAsks[0]?.price ?? 0;
-    const crossed = bestBid > bestAsk;
+    const bestBid = combinedBids[0]?.price;
+    const bestAsk = combinedAsks[0]?.price;
+
+    const crossed =
+      bestBid !== undefined &&
+      bestAsk !== undefined &&
+      bestBid > bestAsk;
+
+    // ✅ Correct lastUpdate (take latest from sources)
+    const lastUpdate = new Date(
+      Math.max(
+        polymarketBook.lastUpdate.getTime(),
+        kalshiBook.lastUpdate.getTime(),
+      ),
+    );
 
     return {
       bids: combinedBids,
       asks: combinedAsks,
-      lastUpdate: new Date(),
+      lastUpdate,
       crossed,
       venueStatus: {
-        polymarket: this.polymarketBook?.venueStatus.polymarket || DISCONNECTED,
-        kalshi: this.kalshiBook?.venueStatus.kalshi || DISCONNECTED,
+        polymarket:
+          this.polymarketBook?.venueStatus.polymarket || DISCONNECTED,
+        kalshi:
+          this.kalshiBook?.venueStatus.kalshi || DISCONNECTED,
       },
     };
   }
@@ -91,51 +117,51 @@ export class OrderBookAggregator {
     levels: OrderBookLevel[],
     side: OrderBookSide,
   ): OrderBookLevel[] {
-    const grouped = new Map<number, OrderBookLevel>();
+    const grouped = new Map<number, number>(); // price -> size
 
-    levels.forEach((level) => {
-      const price = Number(level.price);
+    for (const level of levels) {
+      const rawPrice = Number(level.price);
       const size = Number(level.size);
 
-      // Skip invalid or non-positive values; aggregation should never produce negatives.
       if (
-        !Number.isFinite(price) ||
+        !Number.isFinite(rawPrice) ||
         !Number.isFinite(size) ||
-        price <= 0 ||
+        rawPrice <= 0 ||
         size <= 0
       ) {
-        return;
+        continue;
       }
 
-      const existing = grouped.get(price);
+      const price = this.normalizePrice(rawPrice);
 
-      if (existing) {
-        existing.size += size;
+      const prevSize = grouped.get(price) || 0;
+      const newSize = prevSize + size;
 
-        if (existing.size <= 0) {
-          grouped.delete(price);
-        }
-      } else {
-        grouped.set(price, {
-          price,
-          size,
-          venue: COMBINED,
-        });
-      }
-    });
+      grouped.set(price, newSize);
+    }
 
-    const sorted = Array.from(grouped.values()).sort((a, b) =>
-      side === BIDS ? b.price - a.price : a.price - b.price,
-    );
+    const sorted: OrderBookLevel[] = Array.from(grouped.entries())
+      .map(([price, size]) => ({
+        price,
+        size,
+        venue: COMBINED,
+      }))
+      .sort((a, b) =>
+        side === BIDS ? b.price - a.price : a.price - b.price,
+      );
 
-    // Keep the book bounded for long-running sessions and to avoid memory blow-up
     return sorted.slice(0, OrderBookAggregator.MAX_LEVELS);
   }
 
-  getVenueStatus(): { polymarket: ConnectionStatus; kalshi: ConnectionStatus } {
+  getVenueStatus(): {
+    polymarket: ConnectionStatus;
+    kalshi: ConnectionStatus;
+  } {
     return {
-      polymarket: this.polymarketBook?.venueStatus.polymarket || DISCONNECTED,
-      kalshi: this.kalshiBook?.venueStatus.kalshi || DISCONNECTED,
+      polymarket:
+        this.polymarketBook?.venueStatus.polymarket || DISCONNECTED,
+      kalshi:
+        this.kalshiBook?.venueStatus.kalshi || DISCONNECTED,
     };
   }
 }

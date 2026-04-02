@@ -1,3 +1,4 @@
+import { KALSHI, POLYMARKET } from '@/constants';
 import type {
   OrderBookLevel,
   QuoteResult,
@@ -35,6 +36,7 @@ const executeAcrossLevels = (
   let totalShares = 0;
   let totalCost = 0;
   let bestPrice = 0;
+
   const routing: Array<{
     venue: 'polymarket' | 'kalshi';
     price: number;
@@ -53,34 +55,53 @@ const executeAcrossLevels = (
     };
   }
 
-  bestPrice = levels[0].price;
+  const firstPrice = Number(levels[0]?.price);
+  bestPrice = Number.isFinite(firstPrice) && firstPrice > 0 ? firstPrice : 0;
 
   for (const level of levels) {
     if (remaining <= 0) break;
 
-    const maxSharesByAmount = remaining / level.price;
-    const fillSize = Math.min(level.size, maxSharesByAmount);
-    if (fillSize <= 0) break;
+    const price = Number(level.price);
+    const size = Number(level.size);
 
-    const cost = fillSize * level.price;
+    if (
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      !Number.isFinite(size) ||
+      size <= 0
+    ) {
+      continue;
+    }
+
+    if (level.venue !== POLYMARKET && level.venue !== KALSHI) {
+      continue;
+    }
+
+    const maxSharesByAmount = remaining / price;
+    const fillSize = Math.min(size, maxSharesByAmount);
+
+    if (fillSize <= 0) continue;
+
+    const cost = fillSize * price;
 
     routing.push({
-      venue: level.venue as 'polymarket' | 'kalshi',
-      price: level.price,
+      venue: level.venue,
+      price,
       size: fillSize,
       cost,
     });
 
     totalShares += fillSize;
     totalCost += cost;
-    remaining -= cost;
+
+    remaining = Math.max(0, remaining - cost);
   }
 
   return {
     totalShares,
     totalCost,
-    filledUsd: amountUsd - Math.max(0, remaining),
-    unfilledUsd: Math.max(0, remaining),
+    filledUsd: amountUsd - remaining,
+    unfilledUsd: remaining,
     bestPrice,
     routing,
   };
@@ -90,6 +111,7 @@ const normalizeVenueQuote = (
   raw: ReturnType<typeof executeAcrossLevels>,
 ): VenueQuoteResult => {
   const avgPrice = raw.totalShares > 0 ? raw.totalCost / raw.totalShares : 0;
+
   return {
     available: raw.totalShares > 0,
     shares: raw.totalShares,
@@ -107,13 +129,16 @@ export const calculateQuote = (
   combinedLevels: OrderBookLevel[],
 ): QuoteResult => {
   const normalizedAmount = Number(amountUsd);
+
   if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    const safeAmount = normalizedAmount > 0 ? normalizedAmount : 0;
+
     return {
       totalShares: 0,
       totalCost: 0,
       averagePrice: 0,
       slippage: 0,
-      unfilledAmount: normalizedAmount > 0 ? normalizedAmount : 0,
+      unfilledAmount: safeAmount,
       bestPrice: 0,
       venueBreakdown: {
         polymarket: {
@@ -121,14 +146,14 @@ export const calculateQuote = (
           shares: 0,
           cost: 0,
           avgPrice: 0,
-          unfilledAmount: normalizedAmount > 0 ? normalizedAmount : 0,
+          unfilledAmount: safeAmount,
         },
         kalshi: {
           available: false,
           shares: 0,
           cost: 0,
           avgPrice: 0,
-          unfilledAmount: normalizedAmount > 0 ? normalizedAmount : 0,
+          unfilledAmount: safeAmount,
         },
       },
       routing: [],
@@ -139,9 +164,9 @@ export const calculateQuote = (
   const kalshiSorted = sortLevels(kalshiLevels, side);
   const combinedSorted = sortLevels(combinedLevels, side);
 
-  const polyResult = executeAcrossLevels(amountUsd, polymarketSorted);
-  const kalResult = executeAcrossLevels(amountUsd, kalshiSorted);
-  const combinedResult = executeAcrossLevels(amountUsd, combinedSorted);
+  const polyResult = executeAcrossLevels(normalizedAmount, polymarketSorted);
+  const kalResult = executeAcrossLevels(normalizedAmount, kalshiSorted);
+  const combinedResult = executeAcrossLevels(normalizedAmount, combinedSorted);
 
   const avgPrice =
     combinedResult.totalShares > 0
@@ -149,8 +174,13 @@ export const calculateQuote = (
       : 0;
 
   const bestPrice = combinedResult.bestPrice;
+
   const slippage =
-    bestPrice > 0 ? ((avgPrice - bestPrice) / bestPrice) * 100 : 0;
+    bestPrice > 0
+      ? side === 'buy'
+        ? ((avgPrice - bestPrice) / bestPrice) * 100
+        : ((bestPrice - avgPrice) / bestPrice) * 100
+      : 0;
 
   return {
     totalShares: combinedResult.totalShares,
